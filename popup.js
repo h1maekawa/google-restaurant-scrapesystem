@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const maxItemsVal = document.getElementById('max-items-val');
   const btnStart = document.getElementById('btn-start');
   const btnStop = document.getElementById('btn-stop');
+  const btnReset = document.getElementById('btn-reset');
   const btnDownload = document.getElementById('btn-download');
   const statusIndicator = document.getElementById('status-indicator');
   const statusText = document.getElementById('status-text');
@@ -93,6 +94,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const maxItems = maxItemsSlider.value == 500 ? 999999 : parseInt(maxItemsSlider.value, 10);
     
+    // Clear data if starting a fresh session
+    chrome.storage.local.get(['scrapedData'], (result) => {
+      const currentData = result.scrapedData || [];
+      if (currentData.length > 0) {
+        if (confirm('既存のデータをクリアして新しく開始しますか？\n（「キャンセル」で既存データに追加取得します）')) {
+          chrome.storage.local.set({ scrapedData: [] }, () => {
+            startScraping(tab, maxItems);
+          });
+          return;
+        }
+      }
+      startScraping(tab, maxItems);
+    });
+  });
+
+  function startScraping(tab, maxItems) {
     chrome.storage.local.set({ scrapingState: 'active' }, () => {
       chrome.tabs.sendMessage(tab.id, { action: 'startScraping', maxItems: maxItems }, (response) => {
         if (chrome.runtime.lastError) {
@@ -101,6 +118,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+  }
+
+  // Reset Button
+  btnReset.addEventListener('click', () => {
+    if (confirm('取得済みのデータをすべて削除しますか？')) {
+      chrome.storage.local.set({ 
+        scrapedData: [], 
+        scrapingState: 'inactive' 
+      }, () => {
+        updateUI('inactive', []);
+      });
+    }
   });
 
   // Stop Button

@@ -29,6 +29,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'setState') {
     chrome.storage.local.set({ scrapingState: request.state }, () => {
+      if (request.state === 'done') {
+        chrome.storage.local.get(['scrapedData'], (result) => {
+          const count = result.scrapedData ? result.scrapedData.length : 0;
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: '抽出が完了しました',
+            message: `合計 ${count} 件のデータを取得しました。CSVをダウンロードできます。`,
+            priority: 2
+          });
+        });
+      }
       sendResponse({ success: true });
     });
     return true;

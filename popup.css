@@ -123,6 +123,9 @@ input[type="range"] {
 
 .btn.success { background-color: #28a745; }
 .btn.success:hover:not(:disabled) { background-color: #218838; }
+ 
+.btn.secondary { background-color: #6c757d; }
+.btn.secondary:hover:not(:disabled) { background-color: #5a6268; }
 
 .preview-panel {
   background-color: #fff;
