@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Google Maps Scraper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h2>Google Maps Scraper</h2>
+      <p class="subtitle">店舗リスト自動抽出ツール</p>
+    </header>
+
+    <div class="status-panel">
+      <div id="status-indicator" class="indicator inactive"></div>
+      <p id="status-text">Googleマップの検索結果ページを開いてください</p>
+    </div>
+
+    <div class="control-panel">
+      <div class="form-group">
+        <label for="max-items">最大取得件数: <span id="max-items-val">50</span>件</label>
+        <input type="range" id="max-items" min="10" max="500" step="10" value="50">
+        <div class="helper-text">※右端で制限なし</div>
+      </div>
+
+      <div class="button-group">
+        <button id="btn-start" class="btn primary">▶ 取得開始</button>
+        <button id="btn-stop" class="btn danger" disabled>■ 停止</button>
+        <button id="btn-download" class="btn success" disabled>⬇ CSVダウンロード</button>
+      </div>
+    </div>
+
+    <div class="preview-panel">
+      <h3>取得済みデータ: <span id="count-display">0</span>件</h3>
+      <div class="table-container">
+        <table id="preview-table">
+          <thead>
+            <tr>
+              <th>店舗名</th>
+              <th>評価</th>
+              <th>電話番号</th>
+            </tr>
+          </thead>
+          <tbody id="preview-body">
+            <!-- プレビューデータがここに挿入されます -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
