@@ -23,6 +23,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'getQuery') {
     const searchBox = document.getElementById('searchboxinput');
     sendResponse({ query: searchBox ? searchBox.value : '' });
+  } else if (request.action === 'getMapCenter') {
+    // URLから現在の中心座標を抽出 (@lat,lng,zoom)
+    const url = window.location.href;
+    const match = url.match(/@([-+]?\d+\.\d+),([-+]?\d+\.\d+)/);
+    if (match) {
+      sendResponse({ lat: parseFloat(match[1]), lng: parseFloat(match[2]) });
+    } else {
+      sendResponse({ error: '座標が見つかりませんでした。Googleマップの検索結果が表示されているか確認してください。' });
+    }
   } else if (request.action === 'ping') {
     sendResponse({ status: 'alive' });
   }
@@ -30,6 +39,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function extractCoordsFromUrl(url) {
+  // 1. !3d...!4d... 形式 (詳細URLに含まれることが多い)
+  const matchD = url.match(/!3d([-+]?\d+\.\d+)!4d([-+]?\d+\.\d+)/);
+  if (matchD) {
+    return { lat: parseFloat(matchD[1]), lng: parseFloat(matchD[2]) };
+  }
+  // 2. @lat,lng 形式 (ブラウザのURLに含まれる)
+  const matchAt = url.match(/@([-+]?\d+\.\d+),([-+]?\d+\.\d+)/);
+  if (matchAt) {
+    return { lat: parseFloat(matchAt[1]), lng: parseFloat(matchAt[2]) };
+  }
+  return null;
+}
 
 async function startScrapingLoop() {
   let scrollContainer = document.querySelector('div[role="feed"]');
@@ -83,6 +106,9 @@ async function startScrapingLoop() {
 
           const extractedData = extractDetailData();
           
+          // URLまたは現在のウィンドウURLから座標を抽出
+          let coords = extractCoordsFromUrl(url) || extractCoordsFromUrl(window.location.href);
+
           const placeData = {
             url: url,
             name: name,
@@ -90,6 +116,8 @@ async function startScrapingLoop() {
             reviews: extractedData.reviews || "",
             address: extractedData.address || "",
             phone: extractedData.phone || "",
+            lat: coords ? coords.lat : null,
+            lng: coords ? coords.lng : null,
             source: 'googlemaps'
           };
 
