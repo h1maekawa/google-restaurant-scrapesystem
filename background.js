@@ -29,6 +29,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'setState') {
     chrome.storage.local.set({ scrapingState: request.state }, () => {
+      if (request.state === 'active') {
+        // Prevent system/display sleep
+        chrome.power.requestKeepAwake('display');
+        // Start alarm to keep background worker alive (every 30 seconds)
+        chrome.alarms.create('keepAlive', { periodInMinutes: 0.5 });
+      } else {
+        // Release sleep prevention
+        chrome.power.releaseKeepAwake();
+        chrome.alarms.clear('keepAlive');
+      }
+
       if (request.state === 'done') {
         chrome.storage.local.get(['scrapedData'], (result) => {
           const data = result.scrapedData || [];
@@ -52,6 +63,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
     });
     return true;
+  }
+});
+
+// Alarm listener to keep the service worker and content script awake
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive') {
+    chrome.storage.local.get(['scrapingState'], (result) => {
+      if (result.scrapingState === 'active') {
+        // Ping all tabs that might be scraping to keep them awake
+        chrome.tabs.query({ url: ["https://www.google.com/maps/*", "https://www.google.co.jp/maps/*"] }, (tabs) => {
+          tabs.forEach(tab => {
+            chrome.tabs.sendMessage(tab.id, { action: 'ping' }).catch(() => {
+              // Ignore errors if tab is not ready or doesn't have content script
+            });
+          });
+        });
+      }
+    });
   }
 });
 

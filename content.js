@@ -23,6 +23,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'getQuery') {
     const searchBox = document.getElementById('searchboxinput');
     sendResponse({ query: searchBox ? searchBox.value : '' });
+  } else if (request.action === 'ping') {
+    sendResponse({ status: 'alive' });
   }
   return true;
 });
