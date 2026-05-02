@@ -142,7 +142,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Download Button
-  btnDownload.addEventListener('click', () => {
+  btnDownload.addEventListener('click', async () => {
+    const tab = await getCurrentTab();
+    let query = '';
+    
+    if (tab) {
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, { action: 'getQuery' });
+        query = response ? response.query : '';
+      } catch (e) {
+        console.error("Failed to get query:", e);
+      }
+    }
+
     chrome.storage.local.get(['scrapedData'], (result) => {
       const data = result.scrapedData || [];
       if (data.length === 0) return;
@@ -169,8 +181,31 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
+      
+      // Filename construction
+      let filename = '';
       const date = new Date();
-      const filename = `googlemaps_list_${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}.csv`;
+      const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`;
+      
+      if (query && (query.includes('✖️') || query.includes('×') || query.includes('x'))) {
+        // Handle different multiplication signs
+        const separator = query.includes('✖️') ? '✖️' : (query.includes('×') ? '×' : 'x');
+        const parts = query.split(separator);
+        const area = parts[0] ? parts[0].trim() : '';
+        const industry = parts[1] ? parts[1].trim() : '';
+        
+        if (area && industry) {
+          // Format: 検索ワード(Industry) エリア(Area) Googleマップ.csv
+          filename = `${industry} ${area} Googleマップ.csv`;
+        } else {
+          filename = `${query} Googleマップ.csv`;
+        }
+      } else if (query) {
+        filename = `${query} Googleマップ.csv`;
+      } else {
+        filename = `googlemaps_list_${dateStr}.csv`;
+      }
+
       link.setAttribute('download', filename);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);

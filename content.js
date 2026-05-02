@@ -20,6 +20,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'stopScraping') {
     isScraping = false;
     sendResponse({ status: 'stopped' });
+  } else if (request.action === 'getQuery') {
+    const searchBox = document.getElementById('searchboxinput');
+    sendResponse({ query: searchBox ? searchBox.value : '' });
   }
   return true;
 });
