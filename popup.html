@@ -33,6 +33,15 @@
     </div>
 
     <div class="filter-panel">
+      <h3>ジャンルフィルター設定</h3>
+      <div class="form-group">
+        <label for="target-genres">対象ジャンル (カンマまたは改行区切り):</label>
+        <textarea id="target-genres" placeholder="例: レストラン, イタリア料理店, 居酒屋" rows="2"></textarea>
+        <div class="helper-text">※未入力なら全ジャンルを取得</div>
+      </div>
+    </div>
+
+    <div class="filter-panel">
       <h3>半径フィルター設定</h3>
       <div class="form-group-inline">
         <label class="switch">
@@ -65,7 +74,7 @@
           <thead>
             <tr>
               <th>店舗名</th>
-              <th>評価</th>
+              <th>ジャンル</th>
               <th>電話番号</th>
             </tr>
           </thead>

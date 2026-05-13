@@ -2,6 +2,7 @@
 
 let isScraping = false;
 let maxItemsLimit = 50;
+let targetGenresList = [];
 let collectedUrls = new Set();
 
 // Initialize collectedUrls from storage
@@ -15,6 +16,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'startScraping') {
     isScraping = true;
     maxItemsLimit = request.maxItems || 50;
+    targetGenresList = request.targetGenres || [];
     startScrapingLoop();
     sendResponse({ status: 'started' });
   } else if (request.action === 'stopScraping') {
@@ -112,6 +114,7 @@ async function startScrapingLoop() {
           const placeData = {
             url: url,
             name: name,
+            genre: extractedData.genre || "",
             rating: extractedData.rating || "",
             reviews: extractedData.reviews || "",
             address: extractedData.address || "",
@@ -120,6 +123,16 @@ async function startScrapingLoop() {
             lng: coords ? coords.lng : null,
             source: 'googlemaps'
           };
+
+          // Filter by genre if list is provided
+          if (targetGenresList.length > 0) {
+            const matches = targetGenresList.some(g => placeData.genre.includes(g));
+            if (!matches) {
+              console.log(`Skipping ${placeData.name} - genre "${placeData.genre}" does not match target list.`);
+              collectedUrls.add(url); // Don't process again
+              continue;
+            }
+          }
 
           collectedUrls.add(url);
           
@@ -161,14 +174,27 @@ async function startScrapingLoop() {
 
 function extractDetailData() {
   const data = {
+    genre: "",
     rating: "",
     reviews: "",
     address: "",
     phone: ""
   };
 
+  // 0. Genre (Category)
+  // The user suggested class "DkEaL"
+  const genreEl = document.querySelector('.DkEaL');
+  if (genreEl) {
+    data.genre = genreEl.innerText.trim();
+  } else {
+    // Alternative: look for the button with category information
+    const categoryBtn = document.querySelector('button[jsaction*="category"]');
+    if (categoryBtn) {
+      data.genre = categoryBtn.innerText.trim();
+    }
+  }
+
   // Find all buttons in the detail panel
-  // Google Maps usually exposes address and phone through aria-labels or data-item-id
   
   // 1. Phone
   // Often buttons have data-item-id="phone:tel:..." or aria-label containing phone number

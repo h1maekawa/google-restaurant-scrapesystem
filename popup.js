@@ -18,11 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterRadius = document.getElementById('filter-radius');
   const btnGetCenter = document.getElementById('btn-get-center');
   const displayCoords = document.getElementById('display-coords');
+  const targetGenresTextarea = document.getElementById('target-genres');
 
   let centerPoint = null; // {lat, lng}
 
   // Initialize UI from storage
-  chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig'], (result) => {
+  chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig', 'targetGenres'], (result) => {
     if (result.maxItems) {
       maxItemsSlider.value = result.maxItems;
       updateMaxItemsText(result.maxItems);
@@ -38,6 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleFilterUI(result.filterConfig.enabled);
     } else {
       toggleFilterUI(false);
+    }
+    
+    if (result.targetGenres) {
+      targetGenresTextarea.value = result.targetGenres;
     }
 
     updateUI(result.scrapingState || 'inactive', result.scrapedData || []);
@@ -68,6 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
   filterRadius.addEventListener('change', () => {
     saveFilterConfig();
     refreshUI();
+  });
+
+  targetGenresTextarea.addEventListener('change', () => {
+    chrome.storage.local.set({ targetGenres: targetGenresTextarea.value });
   });
 
   btnGetCenter.addEventListener('click', async () => {
@@ -150,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td title="${item.name}">${item.name || '-'}</td>
-        <td>${item.rating || '-'}</td>
+        <td title="${item.genre}">${item.genre || '-'}</td>
         <td>${item.phone || '-'}</td>
       `;
       previewBody.appendChild(tr);
@@ -195,6 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const maxItems = maxItemsSlider.value == 500 ? 999999 : parseInt(maxItemsSlider.value, 10);
+    const targetGenres = targetGenresTextarea.value
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(s => s !== '');
     
     // Clear data if starting a fresh session
     chrome.storage.local.get(['scrapedData'], (result) => {
@@ -202,18 +215,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentData.length > 0) {
         if (confirm('既存のデータをクリアして新しく開始しますか？\n（「キャンセル」で既存データに追加取得します）')) {
           chrome.storage.local.set({ scrapedData: [] }, () => {
-            startScraping(tab, maxItems);
+            startScraping(tab, maxItems, targetGenres);
           });
           return;
         }
       }
-      startScraping(tab, maxItems);
+      startScraping(tab, maxItems, targetGenres);
     });
   });
 
-  function startScraping(tab, maxItems) {
+  function startScraping(tab, maxItems, targetGenres) {
     chrome.storage.local.set({ scrapingState: 'active' }, () => {
-      chrome.tabs.sendMessage(tab.id, { action: 'startScraping', maxItems: maxItems }, (response) => {
+      chrome.tabs.sendMessage(tab.id, { 
+        action: 'startScraping', 
+        maxItems: maxItems,
+        targetGenres: targetGenres
+      }, (response) => {
         if (chrome.runtime.lastError) {
           alert('ページの再読み込みが必要です。ページをリロードしてからお試しください。');
           chrome.storage.local.set({ scrapingState: 'inactive' });
@@ -279,13 +296,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Create CSV
-      const headers = ['name', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'url', 'source'];
+      const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'url', 'source'];
       // BOM for Excel
       let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
       data.forEach(item => {
         const row = [
           `"${(item.name || '').replace(/"/g, '""')}"`,
+          `"${(item.genre || '').replace(/"/g, '""')}"`,
           `"${(item.address || '').replace(/"/g, '""')}"`,
           `"${(item.phone || '').replace(/"/g, '""')}"`,
           `"${(item.rating || '').replace(/"/g, '""')}"`,
