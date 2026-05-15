@@ -329,16 +329,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const filterSuffix = (config && config.enabled) ? `_r${config.radius}m` : '';
       let filename = '';
 
-      if (query && (query.includes('✖️') || query.includes('×') || query.includes('x'))) {
-        const separator = query.includes('✖️') ? '✖️' : (query.includes('×') ? '×' : 'x');
-        const parts = query.split(separator);
-        const area = parts[0] ? parts[0].trim() : '';
-        const industry = parts[1] ? parts[1].trim() : '';
-        filename = (area && industry)
-          ? `${industry} ${area}${filterSuffix} Googleマップ.csv`
-          : `${query}${filterSuffix} Googleマップ.csv`;
-      } else if (query) {
-        filename = `${query}${filterSuffix} Googleマップ.csv`;
+      if (query) {
+        // クエリがある場合は「検索語句 Google MAP list.csv」の形式にする
+        filename = `${query}${filterSuffix} Google MAP list.csv`;
       } else {
         filename = `googlemaps_list_${dateStr}${filterSuffix}.csv`;
       }
