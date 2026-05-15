@@ -1,0 +1,2 @@
+# google-restaurant-scrapesystem
+Googleマップから飲食店のリストを取得するシステム
