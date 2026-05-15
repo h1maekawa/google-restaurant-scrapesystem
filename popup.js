@@ -11,8 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('status-text');
   const countDisplay = document.getElementById('count-display');
   const previewBody = document.getElementById('preview-body');
-  
-  // New UI Elements
+
+  // Filter UI Elements
   const filterEnabled = document.getElementById('filter-enabled');
   const filterSettings = document.getElementById('filter-settings');
   const filterRadius = document.getElementById('filter-radius');
@@ -20,15 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const displayCoords = document.getElementById('display-coords');
   const targetGenresTextarea = document.getElementById('target-genres');
 
-  let centerPoint = null; // {lat, lng}
+  let centerPoint = null; // { lat, lng }
 
-  // Initialize UI from storage
+  // ── 初期化 ────────────────────────────────────────────────
   chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig', 'targetGenres'], (result) => {
     if (result.maxItems) {
       maxItemsSlider.value = result.maxItems;
       updateMaxItemsText(result.maxItems);
     }
-    
+
     if (result.filterConfig) {
       filterEnabled.checked = result.filterConfig.enabled;
       filterRadius.value = result.filterConfig.radius || 1000;
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       toggleFilterUI(false);
     }
-    
+
     if (result.targetGenres) {
       targetGenresTextarea.value = result.targetGenres;
     }
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUI(result.scrapingState || 'inactive', result.scrapedData || []);
   });
 
-  // Slider change
+  // ── スライダー ────────────────────────────────────────────
   maxItemsSlider.addEventListener('input', (e) => {
     const val = e.target.value;
     updateMaxItemsText(val);
@@ -56,14 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function updateMaxItemsText(val) {
-    if (val == 500) {
-      maxItemsVal.textContent = '上限なし';
-    } else {
-      maxItemsVal.textContent = val;
-    }
+    maxItemsVal.textContent = val == 500 ? '上限なし' : val;
   }
 
-  // Filter Event Listeners
+  // ── フィルターイベント ─────────────────────────────────────
   filterEnabled.addEventListener('change', (e) => {
     toggleFilterUI(e.target.checked);
     saveFilterConfig();
@@ -96,11 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function toggleFilterUI(enabled) {
-    if (enabled) {
-      filterSettings.classList.remove('disabled');
-    } else {
-      filterSettings.classList.add('disabled');
-    }
+    filterSettings.classList.toggle('disabled', !enabled);
   }
 
   function saveFilterConfig() {
@@ -119,43 +111,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Distance calculation (Haversine formula)
+  // ── Haversine距離計算 ─────────────────────────────────────
   function getDistance(lat1, lng1, lat2, lng2) {
     if (!lat1 || !lng1 || !lat2 || !lng2) return Infinity;
-    const R = 6371000; // Earth radius in meters
+    const R = 6371000;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Update UI State
+  // ── UI更新 ────────────────────────────────────────────────
   function updateUI(state, data) {
-    const count = data.length;
-    let displayCount = count;
+    const totalCount = data.length;
+    let displayCount = totalCount;
     let filteredData = data;
 
-    // Apply Filter if enabled
+    // 半径フィルターが有効な場合はpopup側でも表示件数を絞る（storageには範囲内のみ保存済みだが念のため）
     if (filterEnabled.checked && centerPoint) {
       const radius = parseInt(filterRadius.value, 10);
       filteredData = data.filter(item => {
-        if (!item.lat || !item.lng) return false;
-        const dist = getDistance(centerPoint.lat, centerPoint.lng, item.lat, item.lng);
-        return dist <= radius;
+        if (item.lat == null || item.lng == null) return false;
+        return getDistance(centerPoint.lat, centerPoint.lng, item.lat, item.lng) <= radius;
       });
       displayCount = filteredData.length;
-      countDisplay.innerHTML = `${displayCount} <span style="font-size: 0.8em; color: #666;">/ 全体 ${count}</span>`;
+      countDisplay.innerHTML =
+        `<span style="color:#1a73e8;font-weight:bold">${displayCount}件</span>` +
+        `<span style="font-size:0.8em;color:#666"> (半径${radius}m以内) / 全取得 ${totalCount}件</span>`;
     } else {
-      countDisplay.textContent = count;
+      countDisplay.textContent = totalCount;
     }
-    
-    // Update preview table (last 5 items from filtered set if possible, otherwise last 5 from all)
+
+    // プレビューテーブル（最新5件）
     previewBody.innerHTML = '';
-    const previewItems = filteredData.slice(-5).reverse();
-    previewItems.forEach(item => {
+    filteredData.slice(-5).reverse().forEach(item => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td title="${item.name}">${item.name || '-'}</td>
@@ -165,15 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
       previewBody.appendChild(tr);
     });
 
+    // ボタン・ステータス表示
     if (state === 'active') {
       statusIndicator.className = 'indicator active';
-      statusText.textContent = `リストを自動スクロール中... ${count}件取得済み`;
+      statusText.textContent = `リストを自動スクロール中... ${totalCount}件取得済み`;
       btnStart.disabled = true;
       btnStop.disabled = false;
       btnDownload.disabled = displayCount === 0;
     } else if (state === 'done') {
       statusIndicator.className = 'indicator done';
-      statusText.textContent = `抽出完了: 合計 ${count}件取得しました`;
+      statusText.textContent = `抽出完了: 合計 ${totalCount}件取得しました`;
       btnStart.disabled = false;
       btnStart.textContent = '▶ 再開・追加取得';
       btnStop.disabled = true;
@@ -181,21 +174,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // inactive
       statusIndicator.className = 'indicator inactive';
-      statusText.textContent = count > 0 ? `停止中: ${count}件保持` : 'Googleマップの検索結果ページを開いてください';
+      statusText.textContent = totalCount > 0
+        ? `停止中: ${totalCount}件保持`
+        : 'Googleマップの検索結果ページを開いてください';
       btnStart.disabled = false;
-      btnStart.textContent = count > 0 ? '▶ 再開・追加取得' : '▶ 取得開始';
+      btnStart.textContent = totalCount > 0 ? '▶ 再開・追加取得' : '▶ 取得開始';
       btnStop.disabled = true;
       btnDownload.disabled = displayCount === 0;
     }
   }
 
-  // Check if current tab is Google Maps
+  // ── タブ取得 ──────────────────────────────────────────────
   async function getCurrentTab() {
-    let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     return tab;
   }
 
-  // Start Button
+  // ── 取得開始 ──────────────────────────────────────────────
   btnStart.addEventListener('click', async () => {
     const tab = await getCurrentTab();
     if (!tab || (!tab.url.includes('google.com/maps') && !tab.url.includes('google.co.jp/maps'))) {
@@ -208,8 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .split(/[\n,]/)
       .map(s => s.trim())
       .filter(s => s !== '');
-    
-    // Clear data if starting a fresh session
+
     chrome.storage.local.get(['scrapedData'], (result) => {
       const currentData = result.scrapedData || [];
       if (currentData.length > 0) {
@@ -225,11 +219,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function startScraping(tab, maxItems, targetGenres) {
+    // content.js へ渡す形式に変換
+    const contentFilterConfig = (filterEnabled.checked && centerPoint)
+      ? {
+        enabled: true,
+        centerLat: centerPoint.lat,
+        centerLng: centerPoint.lng,
+        radiusMeters: parseInt(filterRadius.value, 10)
+      }
+      : { enabled: false };
+
     chrome.storage.local.set({ scrapingState: 'active' }, () => {
-      chrome.tabs.sendMessage(tab.id, { 
-        action: 'startScraping', 
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'startScraping',
         maxItems: maxItems,
-        targetGenres: targetGenres
+        targetGenres: targetGenres,
+        filterConfig: contentFilterConfig  // ← 追加
       }, (response) => {
         if (chrome.runtime.lastError) {
           alert('ページの再読み込みが必要です。ページをリロードしてからお試しください。');
@@ -239,19 +244,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Reset Button
+  // ── リセット ──────────────────────────────────────────────
   btnReset.addEventListener('click', () => {
     if (confirm('取得済みのデータをすべて削除しますか？')) {
-      chrome.storage.local.set({ 
-        scrapedData: [], 
-        scrapingState: 'inactive' 
-      }, () => {
+      chrome.storage.local.set({ scrapedData: [], scrapingState: 'inactive' }, () => {
         updateUI('inactive', []);
       });
     }
   });
 
-  // Stop Button
+  // ── 停止 ──────────────────────────────────────────────────
   btnStop.addEventListener('click', async () => {
     const tab = await getCurrentTab();
     chrome.storage.local.set({ scrapingState: 'inactive' });
@@ -260,11 +262,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Download Button
+  // ── CSVダウンロード ───────────────────────────────────────
   btnDownload.addEventListener('click', async () => {
     const tab = await getCurrentTab();
     let query = '';
-    
+
     if (tab) {
       try {
         const response = await chrome.tabs.sendMessage(tab.id, { action: 'getQuery' });
@@ -280,13 +282,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (data.length === 0) return;
 
-      // Apply filter for download
+      // ダウンロード時も念のため半径フィルターを適用
       if (config && config.enabled && config.center) {
         const radius = config.radius || 1000;
         data = data.filter(item => {
           if (!item.lat || !item.lng) return false;
-          const dist = getDistance(config.center.lat, config.center.lng, item.lat, item.lng);
-          return dist <= radius;
+          return getDistance(config.center.lat, config.center.lng, item.lat, item.lng) <= radius;
         });
       }
 
@@ -295,9 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Create CSV
-      const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'url', 'source'];
-      // BOM for Excel
+      // CSV生成（distanceMetersカラムを追加）
+      const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
       let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
       data.forEach(item => {
@@ -308,43 +308,45 @@ document.addEventListener('DOMContentLoaded', () => {
           `"${(item.phone || '').replace(/"/g, '""')}"`,
           `"${(item.rating || '').replace(/"/g, '""')}"`,
           `"${(item.reviews || '').replace(/"/g, '""')}"`,
-          `"${item.lat || ''}"`,
-          `"${item.lng || ''}"`,
+          `"${item.lat ?? ''}"`,
+          `"${item.lng ?? ''}"`,
+          `"${item.distanceMeters ?? ''}"`,   // ← 追加
           `"${(item.url || '').replace(/"/g, '""')}"`,
           `"googlemaps"`
         ];
         csvContent += row.join(',') + '\n';
       });
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      
-      // Filename construction
-      let filename = '';
+      // ファイル名生成
       const date = new Date();
-      const dateStr = `${date.getFullYear()}${(date.getMonth()+1).toString().padStart(2,'0')}${date.getDate().toString().padStart(2,'0')}_${date.getHours().toString().padStart(2,'0')}${date.getMinutes().toString().padStart(2,'0')}`;
-      
-      let filterSuffix = (config && config.enabled) ? `_r${config.radius}m` : '';
+      const dateStr =
+        `${date.getFullYear()}` +
+        `${(date.getMonth() + 1).toString().padStart(2, '0')}` +
+        `${date.getDate().toString().padStart(2, '0')}_` +
+        `${date.getHours().toString().padStart(2, '0')}` +
+        `${date.getMinutes().toString().padStart(2, '0')}`;
+
+      const filterSuffix = (config && config.enabled) ? `_r${config.radius}m` : '';
+      let filename = '';
 
       if (query && (query.includes('✖️') || query.includes('×') || query.includes('x'))) {
         const separator = query.includes('✖️') ? '✖️' : (query.includes('×') ? '×' : 'x');
         const parts = query.split(separator);
         const area = parts[0] ? parts[0].trim() : '';
         const industry = parts[1] ? parts[1].trim() : '';
-        
-        if (area && industry) {
-          filename = `${industry} ${area}${filterSuffix} Googleマップ.csv`;
-        } else {
-          filename = `${query}${filterSuffix} Googleマップ.csv`;
-        }
+        filename = (area && industry)
+          ? `${industry} ${area}${filterSuffix} Googleマップ.csv`
+          : `${query}${filterSuffix} Googleマップ.csv`;
       } else if (query) {
         filename = `${query}${filterSuffix} Googleマップ.csv`;
       } else {
         filename = `googlemaps_list_${dateStr}${filterSuffix}.csv`;
       }
 
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
       link.setAttribute('download', filename);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
@@ -353,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Listen for storage changes to update UI in real-time
+  // ── ストレージ変更を監視してリアルタイム更新 ──────────────
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'local') {
       chrome.storage.local.get(['scrapingState', 'scrapedData'], (result) => {

@@ -4,6 +4,7 @@ let isScraping = false;
 let maxItemsLimit = 50;
 let targetGenresList = [];
 let collectedUrls = new Set();
+let filterConfig = null; // { enabled, centerLat, centerLng, radiusMeters }
 
 // Initialize collectedUrls from storage
 chrome.storage.local.get(['scrapedData'], (result) => {
@@ -17,6 +18,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isScraping = true;
     maxItemsLimit = request.maxItems || 50;
     targetGenresList = request.targetGenres || [];
+    filterConfig = request.filterConfig || null; // ← 追加
     startScrapingLoop();
     sendResponse({ status: 'started' });
   } else if (request.action === 'stopScraping') {
@@ -41,6 +43,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Haversine formula で2点間の距離(メートル)を計算
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return Infinity;
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function extractCoordsFromUrl(url) {
   // 1. !3d...!4d... 形式 (詳細URLに含まれることが多い)
@@ -83,7 +98,7 @@ async function startScrapingLoop() {
   while (isScraping && collectedUrls.size < maxItemsLimit) {
     // Find all place links
     const placeLinks = Array.from(document.querySelectorAll('a[href^="https://www.google.com/maps/place/"], a[href^="https://www.google.co.jp/maps/place/"]'));
-    
+
     // Filter unprocessed links
     const newLinks = placeLinks.filter(a => !collectedUrls.has(a.href));
 
@@ -99,15 +114,15 @@ async function startScrapingLoop() {
 
           const url = link.href;
           const name = link.getAttribute('aria-label') || link.innerText || "";
-          
+
           // Click to open details panel
           link.click();
-          
+
           // Wait for detail panel to load
-          await sleep(2000); 
+          await sleep(2000);
 
           const extractedData = extractDetailData();
-          
+
           // URLまたは現在のウィンドウURLから座標を抽出
           let coords = extractCoordsFromUrl(url) || extractCoordsFromUrl(window.location.href);
 
@@ -124,18 +139,32 @@ async function startScrapingLoop() {
             source: 'googlemaps'
           };
 
-          // Filter by genre if list is provided
+          // ── ジャンルフィルター ──────────────────────────────
           if (targetGenresList.length > 0) {
             const matches = targetGenresList.some(g => placeData.genre.includes(g));
             if (!matches) {
               console.log(`Skipping ${placeData.name} - genre "${placeData.genre}" does not match target list.`);
-              collectedUrls.add(url); // Don't process again
+              collectedUrls.add(url); // 再処理しない
+              continue;
+            }
+          }
+
+          // ── 半径フィルター (Haversine) ──────────────────────
+          if (filterConfig && filterConfig.enabled && filterConfig.centerLat != null) {
+            const dist = haversineDistance(
+              filterConfig.centerLat, filterConfig.centerLng,
+              placeData.lat, placeData.lng
+            );
+            placeData.distanceMeters = Math.round(dist); // 距離を付与（CSV出力・デバッグ用）
+            if (dist > filterConfig.radiusMeters) {
+              console.log(`Skipping ${placeData.name} - distance ${Math.round(dist)}m > ${filterConfig.radiusMeters}m`);
+              collectedUrls.add(url); // 再処理しない
               continue;
             }
           }
 
           collectedUrls.add(url);
-          
+
           // Send to background to save
           await new Promise((resolve) => {
             chrome.runtime.sendMessage({ action: 'updateData', data: [placeData] }, (response) => {
@@ -195,7 +224,7 @@ function extractDetailData() {
   }
 
   // Find all buttons in the detail panel
-  
+
   // 1. Phone
   // Often buttons have data-item-id="phone:tel:..." or aria-label containing phone number
   const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"]');
@@ -229,7 +258,7 @@ function extractDetailData() {
     if (label.includes("レビュー") || label.includes("reviews")) {
       const ratingMatch = label.match(/星\s*([\d\.]+)/) || label.match(/([\d\.]+)\s*stars/);
       if (ratingMatch) data.rating = ratingMatch[1];
-      
+
       const reviewMatch = label.match(/レビュー\s*([\d,]+)\s*件/) || label.match(/([\d,]+)\s*reviews/);
       if (reviewMatch) data.reviews = reviewMatch[1].replace(/,/g, '');
       break;
@@ -245,7 +274,7 @@ function extractDetailData() {
       data.address = addressMatch[0];
     }
   }
-  
+
   if (!data.phone) {
     // try finding standard phone format not in a button
     const bodyText = document.body.innerText;
