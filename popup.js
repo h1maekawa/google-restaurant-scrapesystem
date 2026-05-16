@@ -330,8 +330,12 @@ document.addEventListener('DOMContentLoaded', () => {
       let filename = '';
 
       if (query) {
-        // クエリがある場合は「検索語句 Google MAP list.csv」の形式にする
-        filename = `${query}${filterSuffix} Google MAP list.csv`;
+        // クエリがある場合は「検索語句　Googleマップ.csv」の形式にする
+        let displayQuery = query.trim();
+        if (!displayQuery.includes('Googleマップ')) {
+          displayQuery += '　Googleマップ';
+        }
+        filename = `${displayQuery}${filterSuffix}.csv`;
       } else {
         filename = `googlemaps_list_${dateStr}${filterSuffix}.csv`;
       }
