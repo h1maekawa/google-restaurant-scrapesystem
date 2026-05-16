@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnGetCenter = document.getElementById('btn-get-center');
   const displayCoords = document.getElementById('display-coords');
   const targetGenresTextarea = document.getElementById('target-genres');
+  const suggestedGenresContainer = document.getElementById('suggested-genres');
+  const btnFetchGenres = document.getElementById('btn-fetch-genres');
+  const currentQuerySpan = document.getElementById('current-query');
 
   let centerPoint = null; // { lat, lng }
 
@@ -43,10 +46,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (result.targetGenres) {
       targetGenresTextarea.value = result.targetGenres;
+      updateGenreChips();
     }
 
+    updateQueryDisplay();
     updateUI(result.scrapingState || 'inactive', result.scrapedData || []);
   });
+
+  async function updateQueryDisplay() {
+    const tab = await getCurrentTab();
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { action: 'getQuery' }, (response) => {
+        if (response && response.query) {
+          currentQuerySpan.textContent = response.query;
+        } else {
+          currentQuerySpan.textContent = '-';
+        }
+      });
+    }
+  }
 
   // ── スライダー ────────────────────────────────────────────
   maxItemsSlider.addEventListener('input', (e) => {
@@ -73,7 +91,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
   targetGenresTextarea.addEventListener('change', () => {
     chrome.storage.local.set({ targetGenres: targetGenresTextarea.value });
+    updateGenreChips();
   });
+
+  btnFetchGenres.addEventListener('click', async () => {
+    const tab = await getCurrentTab();
+    if (!tab) return;
+
+    btnFetchGenres.textContent = '取得中...';
+    chrome.tabs.sendMessage(tab.id, { action: 'getGenresFromPage' }, (response) => {
+      btnFetchGenres.textContent = '現在のページからジャンルを読み込む';
+      if (response && response.genres) {
+        renderGenreChips(response.genres);
+      }
+    });
+  });
+
+  function renderGenreChips(genres) {
+    suggestedGenresContainer.innerHTML = '';
+    const currentGenres = targetGenresTextarea.value.split(/[\n,]/).map(s => s.trim());
+    
+    genres.forEach(genre => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      if (currentGenres.includes(genre)) chip.classList.add('active');
+      chip.textContent = genre;
+      chip.onclick = () => toggleGenre(genre, chip);
+      suggestedGenresContainer.appendChild(chip);
+    });
+  }
+
+  function toggleGenre(genre, chip) {
+    let genres = targetGenresTextarea.value
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(s => s !== '');
+    
+    if (genres.includes(genre)) {
+      genres = genres.filter(g => g !== genre);
+      chip.classList.remove('active');
+    } else {
+      genres.push(genre);
+      chip.classList.add('active');
+    }
+    
+    targetGenresTextarea.value = genres.join(', ');
+    chrome.storage.local.set({ targetGenres: targetGenresTextarea.value });
+  }
+
+  function updateGenreChips() {
+    const currentGenres = targetGenresTextarea.value.split(/[\n,]/).map(s => s.trim());
+    const chips = suggestedGenresContainer.querySelectorAll('.chip');
+    chips.forEach(chip => {
+      if (currentGenres.includes(chip.textContent)) {
+        chip.classList.add('active');
+      } else {
+        chip.classList.remove('active');
+      }
+    });
+  }
 
   btnGetCenter.addEventListener('click', async () => {
     const tab = await getCurrentTab();
@@ -296,12 +372,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // CSV生成（distanceMetersカラムを追加）
-      const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
+      // CSV生成
+      const headers = ['search_query', 'name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
       let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
       data.forEach(item => {
         const row = [
+          `"${(query || '').replace(/"/g, '""')}"`,
           `"${(item.name || '').replace(/"/g, '""')}"`,
           `"${(item.genre || '').replace(/"/g, '""')}"`,
           `"${(item.address || '').replace(/"/g, '""')}"`,
@@ -310,9 +387,9 @@ document.addEventListener('DOMContentLoaded', () => {
           `"${(item.reviews || '').replace(/"/g, '""')}"`,
           `"${item.lat ?? ''}"`,
           `"${item.lng ?? ''}"`,
-          `"${item.distanceMeters ?? ''}"`,   // ← 追加
+          `"${item.distanceMeters ?? ''}"`,
           `"${(item.url || '').replace(/"/g, '""')}"`,
-          `"googlemaps"`
+          `"Google Maps"`
         ];
         csvContent += row.join(',') + '\n';
       });

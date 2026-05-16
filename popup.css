@@ -300,3 +300,53 @@ textarea {
   box-sizing: border-box;
   margin-bottom: 4px;
 }
+
+.query-info {
+  font-size: 11px;
+  background-color: #e8f0fe;
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: #1a73e8;
+  margin-top: 8px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #c2e7ff;
+}
+
+#current-query {
+  font-weight: bold;
+  color: #0d47a1;
+}
+
+.chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.chip {
+  font-size: 11px;
+  background-color: #fff;
+  border: 1px solid #dadce0;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #3c4043;
+  user-select: none;
+}
+
+.chip:hover {
+  background-color: #f1f3f4;
+  border-color: #bdc1c6;
+}
+
+.chip.active {
+  background-color: #e8f0fe;
+  border-color: #1a73e8;
+  color: #1a73e8;
+  font-weight: bold;
+}

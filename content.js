@@ -36,6 +36,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else {
       sendResponse({ error: '座標が見つかりませんでした。Googleマップの検索結果が表示されているか確認してください。' });
     }
+  } else if (request.action === 'getGenresFromPage') {
+    const genres = new Set();
+    // 検索結果リストからジャンルを抽出
+    const genreElements = document.querySelectorAll('.DkEaL');
+    genreElements.forEach(el => {
+      const text = el.innerText.trim();
+      if (text) genres.add(text);
+    });
+    // 詳細パネルやカテゴリボタンからも抽出を試みる
+    const categoryBtns = document.querySelectorAll('button[jsaction*="category"]');
+    categoryBtns.forEach(btn => {
+      const text = btn.innerText.trim();
+      if (text) genres.add(text);
+    });
+    sendResponse({ genres: Array.from(genres) });
   } else if (request.action === 'ping') {
     sendResponse({ status: 'alive' });
   }

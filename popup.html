@@ -10,6 +10,10 @@
     <header>
       <h2>Google Maps Scraper</h2>
       <p class="subtitle">店舗リスト自動抽出ツール</p>
+      <div id="query-display" class="query-info">
+        <span>📍 現在の検索:</span>
+        <span id="current-query">読み込み中...</span>
+      </div>
     </header>
 
     <div class="status-panel">
@@ -35,9 +39,13 @@
     <div class="filter-panel">
       <h3>ジャンルフィルター設定</h3>
       <div class="form-group">
-        <label for="target-genres">対象ジャンル (カンマまたは改行区切り):</label>
+        <label for="target-genres">対象ジャンル (クリックで選択 / 入力):</label>
         <textarea id="target-genres" placeholder="例: レストラン, イタリア料理店, 居酒屋" rows="2"></textarea>
-        <div class="helper-text">※未入力なら全ジャンルを取得</div>
+        <div id="suggested-genres" class="chip-container">
+          <!-- ジャンルチップがここに表示されます -->
+        </div>
+        <button id="btn-fetch-genres" class="btn secondary-sm">現在のページからジャンルを読み込む</button>
+        <div class="helper-text" style="margin-top: 4px; text-align: left;">※未入力なら全ジャンルを取得</div>
       </div>
     </div>
 
