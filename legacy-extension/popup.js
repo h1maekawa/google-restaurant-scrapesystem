@@ -69,8 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.tabs.sendMessage(tab.id, { action: 'getQuery' }, (response) => {
         if (response && response.query) {
           currentQuerySpan.textContent = response.query;
+          chrome.storage.local.set({ lastQuery: response.query });
         } else {
-          currentQuerySpan.textContent = '-';
+          chrome.storage.local.get(['lastQuery'], (res) => {
+            currentQuerySpan.textContent = res.lastQuery || '-';
+          });
         }
       });
     }
@@ -420,7 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    chrome.storage.local.get(['scrapedData', 'filterConfig'], (result) => {
+    chrome.storage.local.get(['scrapedData', 'filterConfig', 'lastQuery'], (result) => {
+      // リアルタイム取得に失敗した場合は保存しておいたクエリを使用
+      if (!query) {
+        query = result.lastQuery || '';
+      }
+
       let data = result.scrapedData || [];
       const config = result.filterConfig;
 

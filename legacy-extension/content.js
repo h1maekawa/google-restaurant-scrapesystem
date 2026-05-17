@@ -26,7 +26,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'stopped' });
   } else if (request.action === 'getQuery') {
     const searchBox = document.getElementById('searchboxinput');
-    sendResponse({ query: searchBox ? searchBox.value : '' });
+    let query = searchBox ? searchBox.value : '';
+    if (!query) {
+      // フォールバック: タイトルから抽出（例: "八潮市 スイーツ - Google マップ"）
+      const titleMatch = document.title.match(/^(.*?) - Google/);
+      if (titleMatch) {
+        query = titleMatch[1];
+      }
+    }
+    sendResponse({ query: query });
   } else if (request.action === 'getMapCenter') {
     // URLから現在の中心座標を抽出 (@lat,lng,zoom)
     const url = window.location.href;
