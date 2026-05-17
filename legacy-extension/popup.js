@@ -25,8 +25,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let centerPoint = null; // { lat, lng }
 
+  const PRESET_GENRES = [
+    'カフェ', 'スイーツ', 'ラーメン', '居酒屋', '焼肉',
+    '寿司', 'イタリアン', 'フレンチ', '和食', '中華',
+    '喫茶店', 'ベーカリー'
+  ];
+
   // ── 初期化 ────────────────────────────────────────────────
   chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig', 'targetGenres'], (result) => {
+    // プリセットチェックボックスを描画
+    renderPresetGenres();
     if (result.maxItems) {
       maxItemsSlider.value = result.maxItems;
       updateMaxItemsText(result.maxItems);
@@ -47,6 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (result.targetGenres) {
       targetGenresTextarea.value = result.targetGenres;
       updateGenreChips();
+    } else {
+      updateGenreChips(); // プリセットチェックの初期同期用
     }
 
     updateQueryDisplay();
@@ -141,6 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateGenreChips() {
     const currentGenres = targetGenresTextarea.value.split(/[\n,]/).map(s => s.trim());
+    
+    // チップの同期
     const chips = suggestedGenresContainer.querySelectorAll('.chip');
     chips.forEach(chip => {
       if (currentGenres.includes(chip.textContent)) {
@@ -149,6 +161,62 @@ document.addEventListener('DOMContentLoaded', () => {
         chip.classList.remove('active');
       }
     });
+
+    // プリセットチェックボックスの同期
+    const checkboxes = document.querySelectorAll('#preset-genres input[type="checkbox"]');
+    checkboxes.forEach(chk => {
+      chk.checked = currentGenres.includes(chk.value);
+    });
+  }
+
+  function renderPresetGenres() {
+    const container = document.getElementById('preset-genres');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const currentGenres = targetGenresTextarea.value.split(/[\n,]/).map(s => s.trim());
+
+    PRESET_GENRES.forEach((genre, index) => {
+      const div = document.createElement('div');
+      div.className = 'preset-item';
+
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = `preset-chk-${index}`;
+      chk.value = genre;
+      chk.checked = currentGenres.includes(genre);
+
+      chk.addEventListener('change', () => {
+        togglePresetGenre(genre, chk.checked);
+      });
+
+      const lbl = document.createElement('label');
+      lbl.htmlFor = chk.id;
+      lbl.textContent = genre;
+
+      div.appendChild(chk);
+      div.appendChild(lbl);
+      container.appendChild(div);
+    });
+  }
+
+  function togglePresetGenre(genre, isChecked) {
+    let genres = targetGenresTextarea.value
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(s => s !== '');
+
+    if (isChecked) {
+      if (!genres.includes(genre)) {
+        genres.push(genre);
+      }
+    } else {
+      genres = genres.filter(g => g !== genre);
+    }
+
+    targetGenresTextarea.value = genres.join(', ');
+    chrome.storage.local.set({ targetGenres: targetGenresTextarea.value });
+    updateGenreChips(); // チップの同期およびストレージ反映
   }
 
   btnGetCenter.addEventListener('click', async () => {

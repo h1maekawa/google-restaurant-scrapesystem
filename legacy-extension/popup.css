@@ -350,3 +350,42 @@ textarea {
   color: #1a73e8;
   font-weight: bold;
 }
+
+/* Preset Checklist UI */
+.preset-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background-color: #fff;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 100px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.preset-item input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0;
+  width: 13px;
+  height: 13px;
+}
+
+.preset-item label {
+  cursor: pointer;
+  margin: 0;
+  font-weight: normal;
+  user-select: none;
+  font-size: 11px;
+}
+

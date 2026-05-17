@@ -39,8 +39,14 @@
     <div class="filter-panel">
       <h3>ジャンルフィルター設定</h3>
       <div class="form-group">
-        <label for="target-genres">対象ジャンル (クリックで選択 / 入力):</label>
+        <label for="target-genres">対象ジャンル (入力 / クイック選択):</label>
         <textarea id="target-genres" placeholder="例: レストラン, イタリア料理店, 居酒屋" rows="2"></textarea>
+        
+        <label style="margin-top: 8px;">飲食業種クイック選択 (チェックボックス):</label>
+        <div id="preset-genres" class="preset-container">
+          <!-- チェックボックスがここに動的に生成されます -->
+        </div>
+
         <div id="suggested-genres" class="chip-container">
           <!-- ジャンルチップがここに表示されます -->
         </div>
