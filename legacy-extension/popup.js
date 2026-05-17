@@ -23,6 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnFetchGenres = document.getElementById('btn-fetch-genres');
   const currentQuerySpan = document.getElementById('current-query');
 
+  const searchAreaInput = document.getElementById('search-area');
+  const searchKeywordInput = document.getElementById('search-keyword');
+  const btnOpenMap = document.getElementById('btn-open-map');
+
   let centerPoint = null; // { lat, lng }
 
   const PRESET_GENRES = [
@@ -32,9 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   // ── 初期化 ────────────────────────────────────────────────
-  chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig', 'targetGenres'], (result) => {
+  chrome.storage.local.get(['scrapingState', 'scrapedData', 'maxItems', 'filterConfig', 'targetGenres', 'searchArea', 'searchKeyword'], (result) => {
     // プリセットチェックボックスを描画
     renderPresetGenres();
+
+    if (result.searchArea) searchAreaInput.value = result.searchArea;
+    if (result.searchKeyword) searchKeywordInput.value = result.searchKeyword;
 
     if (result.maxItems) {
       maxItemsSlider.value = result.maxItems;
@@ -90,6 +97,34 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateMaxItemsText(val) {
     maxItemsVal.textContent = val == 500 ? '上限なし' : val;
   }
+
+  // ── 検索イベント ─────────────────────────────────────
+  searchAreaInput.addEventListener('input', () => {
+    chrome.storage.local.set({ searchArea: searchAreaInput.value });
+  });
+
+  searchKeywordInput.addEventListener('input', () => {
+    chrome.storage.local.set({ searchKeyword: searchKeywordInput.value });
+  });
+
+  btnOpenMap.addEventListener('click', () => {
+    const area = searchAreaInput.value.trim();
+    const kw = searchKeywordInput.value.trim();
+    if (!area && !kw) {
+      alert('エリアまたはキーワードを入力してください');
+      return;
+    }
+    const query = `${area} ${kw}`.trim();
+    chrome.storage.local.set({
+      searchArea: area,
+      searchKeyword: kw,
+      lastQuery: query
+    }, () => {
+      // 記録したクエリでGoogleマップを開く
+      const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
+      chrome.tabs.create({ url });
+    });
+  });
 
   // ── フィルターイベント ─────────────────────────────────────
   filterEnabled.addEventListener('change', (e) => {

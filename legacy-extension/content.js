@@ -25,13 +25,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isScraping = false;
     sendResponse({ status: 'stopped' });
   } else if (request.action === 'getQuery') {
-    const searchBox = document.getElementById('searchboxinput');
-    let query = searchBox ? searchBox.value : '';
+    let query = '';
+    
+    // 1. name="q" の検索ボックス
+    const inputQ = document.querySelector('input[name="q"]');
+    if (inputQ && inputQ.value) query = inputQ.value;
+
+    // 2. id="searchboxinput" の検索ボックス
     if (!query) {
-      // フォールバック: タイトルから抽出（例: "八潮市 スイーツ - Google マップ"）
+      const searchBox = document.getElementById('searchboxinput');
+      if (searchBox && searchBox.value) query = searchBox.value;
+    }
+    
+    // 3. URLからの抽出 (例: /maps/search/八潮市+お好み焼き/)
+    if (!query) {
+      const urlMatch = window.location.href.match(/\/maps\/search\/([^\/]+)/);
+      if (urlMatch) {
+        try {
+          query = decodeURIComponent(urlMatch[1].replace(/\+/g, ' '));
+        } catch (e) {}
+      }
+    }
+
+    // 4. タイトルからのフォールバック (店舗詳細ページの場合は避ける)
+    if (!query) {
       const titleMatch = document.title.match(/^(.*?) - Google/);
       if (titleMatch) {
-        query = titleMatch[1];
+        // 店舗詳細だと URLが /maps/place/ になっていることが多い
+        if (!window.location.href.includes('/maps/place/')) {
+          query = titleMatch[1];
+        }
       }
     }
     sendResponse({ query: query });

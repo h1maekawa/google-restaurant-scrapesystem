@@ -36,10 +36,24 @@
       </div>
     </div>
 
-    <div class="filter-panel">
-      <h3>ジャンルフィルター設定</h3>
+    <div class="filter-panel" style="margin-bottom: 12px; background-color: #e8f0fe; border-left: 4px solid #1a73e8;">
+      <h3>1. 検索エリア・キーワード</h3>
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label for="search-area">エリア (例: 八潮市, 渋谷区):</label>
+        <input type="text" id="search-area" class="input-text" placeholder="エリアを入力">
+      </div>
       <div class="form-group">
-        <label for="target-genres">対象ジャンル (入力 / クイック選択):</label>
+        <label for="search-keyword">ジャンル・キーワード (例: お好み焼き):</label>
+        <input type="text" id="search-keyword" class="input-text" placeholder="キーワードを入力">
+      </div>
+      <button id="btn-open-map" class="btn primary" style="width: 100%; margin-top: 10px; background-color: #1a73e8;">🔍 この条件でGoogleマップを開く</button>
+      <div class="helper-text" style="margin-top: 4px; text-align: left;">※このキーワードがCSVのファイル名になります</div>
+    </div>
+
+    <div class="filter-panel">
+      <h3>2. 取得条件・ジャンル絞り込み</h3>
+      <div class="form-group">
+        <label for="target-genres">抽出対象とするジャンル (カンマ区切り):</label>
         <textarea id="target-genres" placeholder="例: レストラン, イタリア料理店, 居酒屋" rows="2"></textarea>
         
         <label style="margin-top: 8px;">飲食業種クイック選択 (チェックボックス):</label>

@@ -223,7 +223,16 @@ function sanitizeFilename(str) {
 async function handleAutomaticDownload(tabId, data, filterConfig) {
   try {
     const response = await chrome.tabs.sendMessage(tabId, { action: 'getQuery' });
-    const query = response ? response.query : '';
+    let query = response ? response.query : '';
+
+    if (!query) {
+      const storageResult = await new Promise(resolve => {
+        chrome.storage.local.get(['lastQuery'], resolve);
+      });
+      if (storageResult.lastQuery) {
+        query = storageResult.lastQuery;
+      }
+    }
 
     // CSV生成
     const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
