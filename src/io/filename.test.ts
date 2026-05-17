@@ -1,9 +1,9 @@
 // tests/filename.test.ts
 
 import { describe, it, expect } from 'vitest';
-import { generateFilename } from '../src/io/filename';
-import { parseSearchQuery } from '../src/core/extractor';
-import type { SearchContext } from '../src/types';
+import { generateFilename } from './filename';
+import { parseSearchQuery } from '../core/extractor';
+import type { SearchContext } from '../types';
 
 describe('generateFilename', () => {
   const ctx: SearchContext = {
@@ -15,11 +15,11 @@ describe('generateFilename', () => {
   };
 
   it('CSV形式', () => {
-    expect(generateFilename(ctx, 'csv')).toBe('tokyo_shibuya_cafe_2026-05-16.csv');
+    expect(generateFilename(ctx, 'csv')).toBe('東京都 渋谷 カフェ　Googleマップ.csv');
   });
 
   it('JSON形式', () => {
-    expect(generateFilename(ctx, 'json')).toBe('tokyo_shibuya_cafe_2026-05-16.json');
+    expect(generateFilename(ctx, 'json')).toBe('東京都 渋谷 カフェ　Googleマップ.json');
   });
 });
 

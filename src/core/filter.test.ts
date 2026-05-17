@@ -1,8 +1,8 @@
 // tests/filter.test.ts
 
 import { describe, it, expect } from 'vitest';
-import { haversineKm, matchesCategory, applyFilters } from '../src/core/filter';
-import type { PlaceData } from '../src/types';
+import { haversineKm, matchesCategory, applyFilters } from './filter';
+import type { PlaceData } from '../types';
 
 // ── haversineKm ───────────────────────────────────────────────────────────────
 

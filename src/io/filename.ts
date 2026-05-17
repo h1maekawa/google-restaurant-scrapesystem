@@ -9,20 +9,15 @@ export function generateFilename(
   context: SearchContext,
   format: 'csv' | 'json',
 ): string {
-  const parts = [
-    sanitize(context.prefecture),
-    sanitize(context.city),
-    sanitize(context.genre),
-    context.searchDate, // YYYY-MM-DD はそのまま使用
-  ].filter(Boolean);
-
-  return `${parts.join('_')}.${format}`;
+  const query = context.rawQuery ? context.rawQuery.trim() : '';
+  if (query) {
+    const suffix = query.includes('Googleマップ') ? '' : '　Googleマップ';
+    return `${sanitizeFilename(query)}${suffix}.${format}`;
+  }
+  return `googlemaps_list_${context.searchDate}.${format}`;
 }
 
-function sanitize(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^\w\-]/g, '_')  // 記号をアンダースコアに
-    .replace(/_+/g, '_')        // 連続アンダースコアを1つに
-    .replace(/^_|_$/g, '');     // 前後のアンダースコアを除去
+function sanitizeFilename(name: string): string {
+  // OSでファイル名として使用できない文字 (\ / : * ? " < > |) をアンダースコアに置換
+  return name.replace(/[\\/:*?"<>|]/g, '_');
 }
