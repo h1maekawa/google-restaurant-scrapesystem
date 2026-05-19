@@ -21,6 +21,7 @@ export interface PlaceData {
   category: string;         // Google Maps 内部カテゴリ
   address: string;
   phone: string;
+  businessHours: string;    // 営業時間
   rating: string;
   reviewCount: string;
   latitude: number | null;
@@ -60,6 +61,7 @@ export interface RawExtracted {
   category: string;
   address: string;
   phone: string;
+  businessHours: string;
   rating: string;
   reviewCount: string;
 }

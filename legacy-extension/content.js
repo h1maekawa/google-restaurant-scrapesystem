@@ -180,6 +180,7 @@ async function startScrapingLoop() {
             reviews: extractedData.reviews || "",
             address: extractedData.address || "",
             phone: extractedData.phone || "",
+            businessHours: extractedData.businessHours || "",
             lat: coords ? coords.lat : null,
             lng: coords ? coords.lng : null,
             source: 'googlemaps'
@@ -253,7 +254,8 @@ function extractDetailData() {
     rating: "",
     reviews: "",
     address: "",
-    phone: ""
+    phone: "",
+    businessHours: ""
   };
 
   // 0. Genre (Category)
@@ -308,6 +310,34 @@ function extractDetailData() {
       const reviewMatch = label.match(/レビュー\s*([\d,]+)\s*件/) || label.match(/([\d,]+)\s*reviews/);
       if (reviewMatch) data.reviews = reviewMatch[1].replace(/,/g, '');
       break;
+    }
+  }
+
+  // 4. Business Hours
+  const ohBtn = document.querySelector('button[data-item-id="oh"]');
+  if (ohBtn) {
+    const ariaLabel = ohBtn.getAttribute('aria-label');
+    if (ariaLabel) {
+      let cleanLabel = ariaLabel
+        .replace(/^営業時間:\s*/, '')
+        .replace(/^Hours:\s*/, '')
+        .replace(/[。.]\s*営業時間情報を編集.*$/, '')
+        .replace(/[。.]\s*Edit business hours.*$/, '')
+        .trim();
+      data.businessHours = cleanLabel;
+    }
+    if (!data.businessHours) {
+      data.businessHours = ohBtn.innerText.trim();
+    }
+  } else {
+    const altOh = document.querySelector('[aria-label*="営業時間"], [data-tooltip*="営業時間"]');
+    if (altOh) {
+      const label = altOh.getAttribute('aria-label') || altOh.getAttribute('data-tooltip') || '';
+      data.businessHours = label
+        .replace(/^営業時間:\s*/, '')
+        .replace(/^Hours:\s*/, '')
+        .replace(/[。.]\s*営業時間情報を編集.*$/, '')
+        .trim();
     }
   }
 

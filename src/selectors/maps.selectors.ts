@@ -72,6 +72,16 @@ export const SELECTORS = {
     ],
   },
 
+  // 営業時間
+  businessHours: {
+    key: 'businessHours',
+    primary: 'button[data-item-id="oh"]',
+    fallbacks: [
+      '[aria-label*="営業時間"]',
+      '[data-tooltip*="営業時間"]',
+    ],
+  },
+
   // 評価（星）
   rating: {
     key: 'rating',

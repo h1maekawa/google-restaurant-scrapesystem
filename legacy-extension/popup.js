@@ -482,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td title="${item.name}">${item.name || '-'}</td>
         <td title="${item.genre}">${item.genre || '-'}</td>
         <td>${item.phone || '-'}</td>
+        <td title="${item.businessHours || ''}">${item.businessHours || '-'}</td>
       `;
       previewBody.appendChild(tr);
     });
@@ -623,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // CSV生成
-      const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
+      const headers = ['name', 'genre', 'address', 'phone', 'business_hours', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
       let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
       data.forEach(item => {
@@ -632,6 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
           `"${(item.genre || '').replace(/"/g, '""')}"`,
           `"${(item.address || '').replace(/"/g, '""')}"`,
           `"${(item.phone || '').replace(/"/g, '""')}"`,
+          `"${(item.businessHours || '').replace(/"/g, '""')}"`,
           `"${(item.rating || '').replace(/"/g, '""')}"`,
           `"${(item.reviews || '').replace(/"/g, '""')}"`,
           `"${item.lat ?? ''}"`,

@@ -117,11 +117,12 @@ export async function extractPlaceDetail(
 ): Promise<Omit<PlaceData, 'distanceKm'>> {
   // セレクターをシリアライズしてevaluateに渡す
   const sels = {
-    category:  serializeSelector(SELECTORS.category),
-    address:   serializeSelector(SELECTORS.address),
-    phone:     serializeSelector(SELECTORS.phone),
-    rating:    serializeSelector(SELECTORS.rating),
-    placeName: serializeSelector(SELECTORS.placeName),
+    category:      serializeSelector(SELECTORS.category),
+    address:       serializeSelector(SELECTORS.address),
+    phone:         serializeSelector(SELECTORS.phone),
+    businessHours: serializeSelector(SELECTORS.businessHours),
+    rating:        serializeSelector(SELECTORS.rating),
+    placeName:     serializeSelector(SELECTORS.placeName),
   };
 
   const raw: RawExtracted = await page.evaluate((selectors) => {
@@ -158,6 +159,22 @@ export async function extractPlaceDetail(
     const phoneMatch = phoneText.match(/[\d\-+() ]{10,}/);
     const phone = phoneMatch ? phoneMatch[0].trim() : '';
 
+    // 営業時間
+    const ohEl = query(selectors.businessHours.primary, selectors.businessHours.fallbacks);
+    const ohLabel = ohEl?.getAttribute('aria-label') ?? '';
+    let businessHours = '';
+    if (ohLabel) {
+      businessHours = ohLabel
+        .replace(/^営業時間:\s*/, '')
+        .replace(/^Hours:\s*/, '')
+        .replace(/[。.]\s*営業時間情報を編集.*$/, '')
+        .replace(/[。.]\s*Edit business hours.*$/, '')
+        .trim();
+    }
+    if (!businessHours && ohEl) {
+      businessHours = ohEl.textContent?.trim() ?? '';
+    }
+
     // 評価・レビュー数
     let rating = '';
     let reviewCount = '';
@@ -175,23 +192,24 @@ export async function extractPlaceDetail(
       }
     }
 
-    return { name, category, address, phone, rating, reviewCount };
+    return { name, category, address, phone, businessHours, rating, reviewCount };
   }, sels);
 
   // 座標抽出: ページURL → 渡されたURL の順で試す
   const coords = extractCoordsFromUrl(page.url()) ?? extractCoordsFromUrl(url);
 
   return {
-    name:        raw.name,
-    category:    raw.category,
-    address:     raw.address,
-    phone:       raw.phone,
-    rating:      raw.rating,
-    reviewCount: raw.reviewCount,
-    latitude:    coords?.lat ?? null,
-    longitude:   coords?.lng ?? null,
+    name:          raw.name,
+    category:      raw.category,
+    address:       raw.address,
+    phone:         raw.phone,
+    businessHours: raw.businessHours,
+    rating:        raw.rating,
+    reviewCount:   raw.reviewCount,
+    latitude:      coords?.lat ?? null,
+    longitude:     coords?.lng ?? null,
     url,
-    scrapedAt:   new Date().toISOString(),
-    source:      'googlemaps',
+    scrapedAt:     new Date().toISOString(),
+    source:        'googlemaps',
   };
 }

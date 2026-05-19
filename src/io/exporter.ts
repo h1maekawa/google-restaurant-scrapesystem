@@ -7,18 +7,19 @@ import type { PlaceData, ExportResult } from '../types';
 
 // ── CSVカラム定義（追加・変更はここだけ）────────────────────────────────────
 const CSV_HEADERS = [
-  { id: 'name',        title: 'name'         },
-  { id: 'category',    title: 'category'     },
-  { id: 'address',     title: 'address'      },
-  { id: 'phone',       title: 'phone'        },
-  { id: 'rating',      title: 'rating'       },
-  { id: 'reviewCount', title: 'review_count' },
-  { id: 'latitude',    title: 'latitude'     },
-  { id: 'longitude',   title: 'longitude'    },
-  { id: 'distanceKm',  title: 'distance_km'  },
-  { id: 'url',         title: 'url'          },
-  { id: 'scrapedAt',   title: 'scraped_at'   },
-  { id: 'source',      title: 'source'       },
+  { id: 'name',          title: 'name'           },
+  { id: 'category',      title: 'category'       },
+  { id: 'address',       title: 'address'        },
+  { id: 'phone',         title: 'phone'          },
+  { id: 'businessHours', title: 'business_hours' },
+  { id: 'rating',        title: 'rating'         },
+  { id: 'reviewCount',   title: 'review_count'   },
+  { id: 'latitude',      title: 'latitude'       },
+  { id: 'longitude',     title: 'longitude'      },
+  { id: 'distanceKm',    title: 'distance_km'    },
+  { id: 'url',           title: 'url'            },
+  { id: 'scrapedAt',     title: 'scraped_at'     },
+  { id: 'source',        title: 'source'         },
 ];
 
 // ── CSV出力 ───────────────────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ const basPlace: PlaceData = {
   category: 'カフェ',
   address: '東京都渋谷区...',
   phone: '03-1234-5678',
+  businessHours: '10:00-22:00',
   rating: '4.2',
   reviewCount: '100',
   latitude: 35.6580,
