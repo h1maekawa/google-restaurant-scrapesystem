@@ -160,7 +160,11 @@ export async function extractPlaceDetail(
     const phone = phoneMatch ? phoneMatch[0].trim() : '';
 
     // 営業時間
-    const ohEl = query(selectors.businessHours.primary, selectors.businessHours.fallbacks);
+    // 優先的に aria-label="1 週間の営業時間を表示" または "1 週間の営業時間を非表示" などのトグル要素を探します
+    let ohEl = document.querySelector(
+      '[aria-label="1 週間の営業時間を表示"], [aria-label*="営業時間を表示"], [aria-label*="営業時間を非表示"], button[data-item-id="oh"]'
+    ) || query(selectors.businessHours.primary, selectors.businessHours.fallbacks);
+
     const ohLabel = ohEl?.getAttribute('aria-label') ?? '';
     let businessHours = '';
     if (ohLabel) {
@@ -181,12 +185,18 @@ export async function extractPlaceDetail(
 
     if (ohEl) {
       // 曜日ごとの時間テーブルを展開するためにボタンをクリックする
-      try {
-        (ohEl as HTMLElement).click();
-        // 簡易スリープ
-        await new Promise(resolve => setTimeout(resolve, 350));
-      } catch (e) {
-        // クリックできなくても続行
+      const label = ohEl.getAttribute('aria-label') || '';
+      const isAlreadyExpanded = label.includes('非表示') || label.includes('Hide') || label.includes('営業時間を非表示');
+      if (!isAlreadyExpanded) {
+        try {
+          (ohEl as HTMLElement).click();
+        } catch (e) {}
+        try {
+          ohEl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        } catch (e) {}
+        
+        // 500msスリープして展開アニメーションを確実に待つ
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       const daysJp = ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'];
@@ -194,30 +204,24 @@ export async function extractPlaceDetail(
       const daysShort = ['月', '火', '水', '木', '金', '土', '日'];
 
       const schedule: Record<string, string> = {};
-      const trs = document.querySelectorAll('tr');
-      for (const tr of trs) {
-        const text = tr.innerText || tr.textContent || '';
+      
+      // 全ての tr, li, div 要素を走査して最適な（最も短い）行情報を取得
+      const candidates = document.querySelectorAll('tr, li, div');
+      for (const el of candidates) {
+        if (el.children.length > 5) continue; // 親すぎる大きなコンテナをスキップ
+        
+        const text = ((el as HTMLElement).innerText || el.textContent || '').trim();
+        if (!text || text.length > 80) continue; // 長すぎるテキストはコンテナなのでスキップ
+
         for (let i = 0; i < 7; i++) {
           const jp = daysJp[i];
           const en = daysEn[i];
           if (text.includes(jp) || text.includes(en)) {
             const cleanText = text.replace(/\s+/g, ' ').trim();
-            schedule[jp] = cleanText;
-          }
-        }
-      }
-
-      // tr で取得できなかった場合のフォールバック（div を探索）
-      if (Object.keys(schedule).length < 3) {
-        const divs = document.querySelectorAll('div');
-        for (const div of divs) {
-          if (div.children.length === 0) {
-            const text = div.innerText || '';
-            for (let i = 0; i < 7; i++) {
-              const jp = daysJp[i];
-              const en = daysEn[i];
-              if ((text.startsWith(jp) || text.startsWith(en)) && text.length < 50) {
-                const cleanText = text.replace(/\s+/g, ' ').trim();
+            // 時間情報または定休日を示すキーワードがあるかチェック
+            const isValidRow = /[\d：:~～-]|定休|閉|Open|Close/i.test(cleanText);
+            if (isValidRow) {
+              if (!schedule[jp] || cleanText.length < schedule[jp].length) {
                 schedule[jp] = cleanText;
               }
             }
