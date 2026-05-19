@@ -230,7 +230,7 @@ export async function extractPlaceDetail(
       }
 
       const holidayDays: string[] = [];
-      const weeklyParts: string[] = [];
+      const scheduleByShortDay: Record<string, string> = {};
 
       for (let i = 0; i < 7; i++) {
         const fullDay = daysJp[i];
@@ -245,9 +245,9 @@ export async function extractPlaceDetail(
 
           if (timeText.includes('定休日') || timeText.includes('Closed') || timeText.includes('定休')) {
             holidayDays.push(fullDay);
-            weeklyParts.push(`${shortDay}: 定休日`);
+            scheduleByShortDay[shortDay] = '定休日';
           } else {
-            weeklyParts.push(`${shortDay}: ${timeText}`);
+            scheduleByShortDay[shortDay] = timeText;
           }
         }
       }
@@ -255,8 +255,44 @@ export async function extractPlaceDetail(
       if (holidayDays.length > 0) {
         regularHoliday = holidayDays.join(', ');
       }
-      if (weeklyParts.length > 0) {
-        openingHoursDetails = weeklyParts.join(', ');
+
+      // 曜日をグループ化してわかりやすくする（例：月〜金: 11:30~19:00）
+      const groups: { startDay: string, endDay: string, text: string }[] = [];
+      let currentGroup: { startDay: string, endDay: string, text: string } | null = null;
+
+      for (const shortDay of daysShort) {
+        const text = scheduleByShortDay[shortDay];
+        if (!text) {
+          if (currentGroup) {
+            groups.push(currentGroup);
+            currentGroup = null;
+          }
+          continue;
+        }
+
+        if (!currentGroup) {
+          currentGroup = { startDay: shortDay, endDay: shortDay, text: text };
+        } else {
+          if (currentGroup.text === text) {
+            currentGroup.endDay = shortDay;
+          } else {
+            groups.push(currentGroup);
+            currentGroup = { startDay: shortDay, endDay: shortDay, text: text };
+          }
+        }
+      }
+      if (currentGroup) {
+        groups.push(currentGroup);
+      }
+
+      if (groups.length > 0) {
+        openingHoursDetails = groups.map(g => {
+          if (g.startDay === g.endDay) {
+            return `${g.startDay}: ${g.text}`;
+          } else {
+            return `${g.startDay}〜${g.endDay}: ${g.text}`;
+          }
+        }).join(', ');
       }
     }
 

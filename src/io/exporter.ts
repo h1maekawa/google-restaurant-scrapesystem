@@ -11,7 +11,6 @@ const CSV_HEADERS = [
   { id: 'category',            title: 'category'              },
   { id: 'address',             title: 'address'               },
   { id: 'phone',               title: 'phone'                 },
-  { id: 'businessHours',       title: 'business_hours'        },
   { id: 'regularHoliday',      title: 'regular_holiday'       },
   { id: 'openingHoursDetails', title: 'opening_hours_details' },
   { id: 'rating',              title: 'rating'                },

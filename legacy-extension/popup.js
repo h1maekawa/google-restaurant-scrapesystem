@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // CSV生成
-      const headers = ['name', 'genre', 'address', 'phone', 'business_hours', 'regular_holiday', 'opening_hours_details', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
+      const headers = ['name', 'genre', 'address', 'phone', 'regular_holiday', 'opening_hours_details', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
       let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
       data.forEach(item => {
@@ -634,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
           `"${(item.genre || '').replace(/"/g, '""')}"`,
           `"${(item.address || '').replace(/"/g, '""')}"`,
           `"${(item.phone || '').replace(/"/g, '""')}"`,
-          `"${(item.businessHours || '').replace(/"/g, '""')}"`,
           `"${(item.regularHoliday || '年中無休').replace(/"/g, '""')}"`,
           `"${(item.openingHoursDetails || '').replace(/"/g, '""')}"`,
           `"${(item.rating || '').replace(/"/g, '""')}"`,
