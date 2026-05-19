@@ -139,9 +139,21 @@ async function startScrapingLoop() {
   }
 
   let noNewElementsCount = 0;
-  const maxNoNewElements = 5; // 5回スクロールしても新しい要素が出なければ終了
+  const maxNoNewElements = 15; // バックグラウンドタブでの遅延を考慮し、15回まで許容
 
   while (isScraping && collectedUrls.size < maxItemsLimit) {
+    // リストの最後に到達したかどうかの文言チェック（ループ先頭で行うことで即時終了可能に）
+    const feedText = scrollContainer.innerText || "";
+    if (
+      feedText.includes("リストの最後に到達しました") || 
+      feedText.includes("これ以上結果はありません") || 
+      feedText.includes("You've reached the end of the list") ||
+      feedText.includes("No more results")
+    ) {
+      console.log("End of list reached detected at loop start. Stopping.");
+      break;
+    }
+
     // Find all place links
     const placeLinks = Array.from(document.querySelectorAll('a[href^="https://www.google.com/maps/place/"], a[href^="https://www.google.co.jp/maps/place/"]'));
 
@@ -154,9 +166,10 @@ async function startScrapingLoop() {
         if (!isScraping || collectedUrls.size >= maxItemsLimit) break;
 
         try {
-          // Scroll to the element to ensure it's loaded
-          link.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await sleep(500);
+          // バックグラウンドタブや別窓で動いているときでもChromeにスロットリング（制限）されないよう、
+          // smoothスクロールではなく「auto（即時）」でスクロールさせます。
+          link.scrollIntoView({ behavior: 'auto', block: 'center' });
+          await sleep(400);
 
           const url = link.href;
           const name = link.getAttribute('aria-label') || link.innerText || "";
@@ -226,13 +239,6 @@ async function startScrapingLoop() {
         }
       }
     } else {
-      // Check for "You've reached the end of the list" or similar text
-      const feedText = scrollContainer.innerText;
-      if (feedText.includes("これ以上結果はありません") || feedText.includes("You've reached the end of the list")) {
-        console.log("End of list reached.");
-        break;
-      }
-
       noNewElementsCount++;
       if (noNewElementsCount >= maxNoNewElements) {
         console.log("No new elements found after multiple scrolls. Stopping.");
