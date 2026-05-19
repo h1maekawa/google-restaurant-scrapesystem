@@ -241,7 +241,14 @@ export async function extractPlaceDetail(
           let timeText = dayInfo
             .replace(fullDay, '')
             .replace(new RegExp(daysEn[i], 'i'), '')
+            .replace(/[\uE000-\uF8FF]/g, '') // 特殊文字（コピーアイコン等）を除去
+            .replace(//g, '')
             .trim();
+
+          // 11時00分～17時00分 などの表記を 11:00〜17:00 に統一して人間に見やすくする
+          timeText = timeText.replace(/(\d{1,2})時(\d{2})分/g, '$1:$2');
+          timeText = timeText.replace(/(\d{1,2})時/g, '$1:00');
+          timeText = timeText.replace(/[～-]/g, '〜');
 
           if (timeText.includes('定休日') || timeText.includes('Closed') || timeText.includes('定休')) {
             holidayDays.push(fullDay);
