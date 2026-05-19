@@ -235,7 +235,7 @@ async function handleAutomaticDownload(tabId, data, filterConfig) {
     }
 
     // CSV生成
-    const headers = ['name', 'genre', 'address', 'phone', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
+    const headers = ['name', 'genre', 'address', 'phone', 'business_hours', 'regular_holiday', 'opening_hours_details', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
     let csvContent = '\uFEFF' + headers.join(',') + '\n';
 
     data.forEach(item => {
@@ -244,6 +244,9 @@ async function handleAutomaticDownload(tabId, data, filterConfig) {
         `"${(item.genre || '').replace(/"/g, '""')}"`,
         `"${(item.address || '').replace(/"/g, '""')}"`,
         `"${(item.phone || '').replace(/"/g, '""')}"`,
+        `"${(item.businessHours || '').replace(/"/g, '""')}"`,
+        `"${(item.regularHoliday || '年中無休').replace(/"/g, '""')}"`,
+        `"${(item.openingHoursDetails || '').replace(/"/g, '""')}"`,
         `"${(item.rating || '').replace(/"/g, '""')}"`,
         `"${(item.reviews || '').replace(/"/g, '""')}"`,
         `"${item.lat ?? ''}"`,
