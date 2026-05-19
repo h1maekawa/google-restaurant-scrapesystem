@@ -10,6 +10,14 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // メッセージ中継やバックグラウンドでのデータ保持
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // ─── 【新規追加】バックグラウンドでのスロットリングを回避するタイマープロキシ ───
+  if (request.action === 'backgroundSleep') {
+    setTimeout(() => {
+      sendResponse({ success: true });
+    }, request.ms);
+    return true; // 非同期レスポンスを有効にするために必須
+  }
+
   if (request.action === 'updateData') {
     chrome.storage.local.get(['scrapedData'], (result) => {
       const currentData = result.scrapedData || [];
