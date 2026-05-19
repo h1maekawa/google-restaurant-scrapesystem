@@ -125,7 +125,7 @@ export async function extractPlaceDetail(
     placeName:     serializeSelector(SELECTORS.placeName),
   };
 
-  const raw: RawExtracted = await page.evaluate((selectors) => {
+  const raw: RawExtracted = await page.evaluate(async (selectors) => {
     function query(primary: string, fallbacks: string[]): Element | null {
       for (const sel of [primary, ...fallbacks]) {
         try {
@@ -175,6 +175,87 @@ export async function extractPlaceDetail(
       businessHours = ohEl.textContent?.trim() ?? '';
     }
 
+    // 定休日と詳細営業時間の抽出
+    let regularHoliday = '年中無休';
+    let openingHoursDetails = '';
+
+    if (ohEl) {
+      // 曜日ごとの時間テーブルを展開するためにボタンをクリックする
+      try {
+        (ohEl as HTMLElement).click();
+        // 簡易スリープ
+        await new Promise(resolve => setTimeout(resolve, 350));
+      } catch (e) {
+        // クリックできなくても続行
+      }
+
+      const daysJp = ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'];
+      const daysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const daysShort = ['月', '火', '水', '木', '金', '土', '日'];
+
+      const schedule: Record<string, string> = {};
+      const trs = document.querySelectorAll('tr');
+      for (const tr of trs) {
+        const text = tr.innerText || tr.textContent || '';
+        for (let i = 0; i < 7; i++) {
+          const jp = daysJp[i];
+          const en = daysEn[i];
+          if (text.includes(jp) || text.includes(en)) {
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            schedule[jp] = cleanText;
+          }
+        }
+      }
+
+      // tr で取得できなかった場合のフォールバック（div を探索）
+      if (Object.keys(schedule).length < 3) {
+        const divs = document.querySelectorAll('div');
+        for (const div of divs) {
+          if (div.children.length === 0) {
+            const text = div.innerText || '';
+            for (let i = 0; i < 7; i++) {
+              const jp = daysJp[i];
+              const en = daysEn[i];
+              if ((text.startsWith(jp) || text.startsWith(en)) && text.length < 50) {
+                const cleanText = text.replace(/\s+/g, ' ').trim();
+                schedule[jp] = cleanText;
+              }
+            }
+          }
+        }
+      }
+
+      const holidayDays: string[] = [];
+      const weeklyParts: string[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const fullDay = daysJp[i];
+        const shortDay = daysShort[i];
+        const dayInfo = schedule[fullDay];
+
+        if (dayInfo) {
+          let timeText = dayInfo
+            .replace(fullDay, '')
+            .replace(new RegExp(daysEn[i], 'i'), '')
+            .trim();
+
+          if (timeText.includes('定休日') || timeText.includes('Closed') || timeText.includes('定休')) {
+            holidayDays.push(fullDay);
+            weeklyParts.push(`${shortDay}: 定休日`);
+          } else {
+            weeklyParts.push(`${shortDay}: ${timeText}`);
+          }
+        }
+      }
+
+      if (holidayDays.length > 0) {
+        regularHoliday = holidayDays.join(', ');
+      }
+      if (weeklyParts.length > 0) {
+        openingHoursDetails = weeklyParts.join(', ');
+      }
+    }
+
     // 評価・レビュー数
     let rating = '';
     let reviewCount = '';
@@ -192,24 +273,26 @@ export async function extractPlaceDetail(
       }
     }
 
-    return { name, category, address, phone, businessHours, rating, reviewCount };
+    return { name, category, address, phone, businessHours, regularHoliday, openingHoursDetails, rating, reviewCount };
   }, sels);
 
   // 座標抽出: ページURL → 渡されたURL の順で試す
   const coords = extractCoordsFromUrl(page.url()) ?? extractCoordsFromUrl(url);
 
   return {
-    name:          raw.name,
-    category:      raw.category,
-    address:       raw.address,
-    phone:         raw.phone,
-    businessHours: raw.businessHours,
-    rating:        raw.rating,
-    reviewCount:   raw.reviewCount,
-    latitude:      coords?.lat ?? null,
-    longitude:     coords?.lng ?? null,
+    name:                raw.name,
+    category:            raw.category,
+    address:             raw.address,
+    phone:               raw.phone,
+    businessHours:       raw.businessHours,
+    regularHoliday:      raw.regularHoliday,
+    openingHoursDetails: raw.openingHoursDetails,
+    rating:              raw.rating,
+    reviewCount:         raw.reviewCount,
+    latitude:            coords?.lat ?? null,
+    longitude:           coords?.lng ?? null,
     url,
-    scrapedAt:     new Date().toISOString(),
-    source:        'googlemaps',
+    scrapedAt:           new Date().toISOString(),
+    source:              'googlemaps',
   };
 }

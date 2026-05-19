@@ -22,6 +22,8 @@ export interface PlaceData {
   address: string;
   phone: string;
   businessHours: string;    // 営業時間
+  regularHoliday: string;       // 定休日
+  openingHoursDetails: string;  // 営業時間の詳細 (曜日ごとのスケジュール)
   rating: string;
   reviewCount: string;
   latitude: number | null;
@@ -62,6 +64,8 @@ export interface RawExtracted {
   address: string;
   phone: string;
   businessHours: string;
+  regularHoliday: string;
+  openingHoursDetails: string;
   rating: string;
   reviewCount: string;
 }

@@ -167,7 +167,7 @@ async function startScrapingLoop() {
           // Wait for detail panel to load
           await sleep(2000);
 
-          const extractedData = extractDetailData();
+          const extractedData = await extractDetailData();
 
           // URLまたは現在のウィンドウURLから座標を抽出
           let coords = extractCoordsFromUrl(url) || extractCoordsFromUrl(window.location.href);
@@ -181,6 +181,8 @@ async function startScrapingLoop() {
             address: extractedData.address || "",
             phone: extractedData.phone || "",
             businessHours: extractedData.businessHours || "",
+            regularHoliday: extractedData.regularHoliday || "年中無休",
+            openingHoursDetails: extractedData.openingHoursDetails || "",
             lat: coords ? coords.lat : null,
             lng: coords ? coords.lng : null,
             source: 'googlemaps'
@@ -248,14 +250,16 @@ async function startScrapingLoop() {
   isScraping = false;
 }
 
-function extractDetailData() {
+async function extractDetailData() {
   const data = {
     genre: "",
     rating: "",
     reviews: "",
     address: "",
     phone: "",
-    businessHours: ""
+    businessHours: "",
+    regularHoliday: "年中無休",
+    openingHoursDetails: ""
   };
 
   // 0. Genre (Category)
@@ -329,6 +333,82 @@ function extractDetailData() {
     if (!data.businessHours) {
       data.businessHours = ohBtn.innerText.trim();
     }
+
+    // 定休日・詳細営業時間の抽出
+    try {
+      ohBtn.click();
+      // 350msスリープ
+      await new Promise(resolve => setTimeout(resolve, 350));
+    } catch (e) {
+      // ignore
+    }
+
+    const daysJp = ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'];
+    const daysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const daysShort = ['月', '火', '水', '木', '金', '土', '日'];
+
+    const schedule = {};
+    const trs = document.querySelectorAll('tr');
+    for (const tr of trs) {
+      const text = tr.innerText || tr.textContent || '';
+      for (let i = 0; i < 7; i++) {
+        const jp = daysJp[i];
+        const en = daysEn[i];
+        if (text.includes(jp) || text.includes(en)) {
+          const cleanText = text.replace(/\s+/g, ' ').trim();
+          schedule[jp] = cleanText;
+        }
+      }
+    }
+
+    // fallback if trs didn't yield enough
+    if (Object.keys(schedule).length < 3) {
+      const divs = document.querySelectorAll('div');
+      for (const div of divs) {
+        if (div.children.length === 0) {
+          const text = div.innerText || '';
+          for (let i = 0; i < 7; i++) {
+            const jp = daysJp[i];
+            const en = daysEn[i];
+            if ((text.startsWith(jp) || text.startsWith(en)) && text.length < 50) {
+              const cleanText = text.replace(/\s+/g, ' ').trim();
+              schedule[jp] = cleanText;
+            }
+          }
+        }
+      }
+    }
+
+    const holidayDays = [];
+    const weeklyParts = [];
+
+    for (let i = 0; i < 7; i++) {
+      const fullDay = daysJp[i];
+      const shortDay = daysShort[i];
+      const dayInfo = schedule[fullDay];
+
+      if (dayInfo) {
+        let timeText = dayInfo
+          .replace(fullDay, '')
+          .replace(new RegExp(daysEn[i], 'i'), '')
+          .trim();
+
+        if (timeText.includes('定休日') || timeText.includes('Closed') || timeText.includes('定休')) {
+          holidayDays.push(fullDay);
+          weeklyParts.push(`${shortDay}: 定休日`);
+        } else {
+          weeklyParts.push(`${shortDay}: ${timeText}`);
+        }
+      }
+    }
+
+    if (holidayDays.length > 0) {
+      data.regularHoliday = holidayDays.join(', ');
+    }
+    if (weeklyParts.length > 0) {
+      data.openingHoursDetails = weeklyParts.join(', ');
+    }
+
   } else {
     const altOh = document.querySelector('[aria-label*="営業時間"], [data-tooltip*="営業時間"]');
     if (altOh) {

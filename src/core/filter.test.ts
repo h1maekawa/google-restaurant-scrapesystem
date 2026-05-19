@@ -57,6 +57,8 @@ const basPlace: PlaceData = {
   address: '東京都渋谷区...',
   phone: '03-1234-5678',
   businessHours: '10:00-22:00',
+  regularHoliday: '水曜日, 日曜日',
+  openingHoursDetails: '月: 10:00-22:00, 火: 10:00-22:00, 水: 定休日, 木: 10:00-22:00, 金: 10:00-22:00, 土: 10:00-22:00, 日: 定休日',
   rating: '4.2',
   reviewCount: '100',
   latitude: 35.6580,
