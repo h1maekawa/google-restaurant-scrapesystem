@@ -57,10 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
     updateUI(result.scrapingState || 'inactive', result.scrapedData || []);
   });
 
-  // ★【バグ修正】URL判定を最適化し、.comや.co.jpの両方に柔軟に対応。過剰なステータスチェックを排除
+  // 有効なGoogleマップタブであるかを検証して無駄な通信エラーを防止
   function isValidMapTab(tab) {
     if (!tab || !tab.url) return false;
-    return tab.url.includes('google.co.jp/maps') || tab.url.includes('google.com/maps') || tab.url.includes('googleusercontent.com');
+    return tab.url.includes('google.co.jp/maps') || tab.url.includes('googleusercontent.com') || tab.url.includes('google.com/maps');
   }
 
   async function updateQueryDisplay() {
@@ -223,7 +223,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return cities.includes(token);
   }
 
-  // ★【構文エラーの完全修正】tokens[0]の直後にあった不要なオブジェクト内セミコロンを消去
   function startScraping(tab, maxItems, targetGenres) {
     const areaInput = searchAreaInput.value.trim();
     let detectedArea = areaInput;
@@ -251,6 +250,90 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { }
     });
   }
+
+  // ★【正常化】登録処理が正しく100%動くようにバグを根絶
+  btnStart.addEventListener('click', async () => {
+    const tab = await getCurrentTab();
+    if (!isValidMapTab(tab)) { alert('Googleマップの画面で実行してください。'); return; }
+
+    const maxItems = maxItemsSlider.value == 500 ? 999999 : parseInt(maxItemsSlider.value, 10);
+    const targetGenres = targetGenresTextarea.value.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+
+    chrome.storage.local.get(['scrapedData'], (result) => {
+      const currentData = result.scrapedData || [];
+      if (currentData.length > 0) {
+        if (confirm('既存のデータをクリアして新しく開始しますか？\n（「キャンセル」で既存データに追加取得します）')) {
+          chrome.storage.local.set({ scrapedData: [] }, () => { startScraping(tab, maxItems, targetGenres); });
+          return;
+        }
+      }
+      startScraping(tab, maxItems, targetGenres);
+    });
+  });
+
+  btnStop.addEventListener('click', async () => {
+    const tab = await getCurrentTab();
+    chrome.storage.local.set({ scrapingState: 'inactive' });
+    if (tab && isValidMapTab(tab)) chrome.tabs.sendMessage(tab.id, { action: 'stopScraping' });
+  });
+
+  btnReset.addEventListener('click', () => {
+    if (confirm('取得済みのデータをすべて削除しますか？')) {
+      chrome.storage.local.set({ scrapedData: [], scrapingState: 'inactive' }, () => { updateUI('inactive', []); });
+    }
+  });
+
+  btnDownload.addEventListener('click', async () => {
+    const tab = await getCurrentTab();
+    let query = '';
+    if (tab && isValidMapTab(tab)) {
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, { action: 'getQuery' });
+        query = response ? response.query : '';
+      } catch (e) { }
+    }
+
+    chrome.storage.local.get(['scrapedData'], (result) => {
+      let data = result.scrapedData || [];
+      if (data.length === 0) return;
+
+      const headers = ['name', 'genre', 'address', 'phone', 'regular_holiday', 'opening_hours_details', 'rating', 'reviews', 'lat', 'lng', 'distance_m', 'url', 'source'];
+      let csvContent = '\uFEFF' + headers.join(',') + '\n';
+
+      data.forEach(item => {
+        const row = [
+          `"${(item.name || '').replace(/"/g, '""')}"`,
+          `"${(item.genre || '').replace(/"/g, '""')}"`,
+          `"${(item.address || '').replace(/"/g, '""')}"`,
+          `"${(item.phone || '').replace(/"/g, '""')}"`,
+          `"${(item.regularHoliday || '年中無休').replace(/"/g, '""')}"`,
+          `"${(item.openingHoursDetails || '情報なし').replace(/"/g, '""')}"`,
+          `"${(item.rating || '').replace(/"/g, '""')}"`,
+          `"${(item.reviews || '').replace(/"/g, '""')}"`,
+          `"${item.lat ?? ''}"`,
+          `"${item.lng ?? ''}"`,
+          `"${item.distanceMeters ?? ''}"`,
+          `"${(item.url || '').replace(/"/g, '""')}"`,
+          `"googlemaps"`
+        ];
+        csvContent += row.join(',') + '\n';
+      });
+
+      const date = new Date();
+      const dateStr = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}`;
+      const filename = `${(query || 'Googleマップ').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_')}_Googleマップ_${dateStr}.csv`;
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  });
 
   function updateUI(state, data) {
     const totalCount = data.length;
