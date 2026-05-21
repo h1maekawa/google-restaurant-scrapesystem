@@ -30,10 +30,12 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.google.com/maps/search/*",
-        "https://www.google.co.jp/maps/search/*"
+        "https://www.google.co.jp/maps/*",
+        "https://www.google.com/maps/*"
       ],
-      "js": ["content.js"]
+      "js": [
+        "content.js"
+      ]
     }
   ],
   "icons": {
