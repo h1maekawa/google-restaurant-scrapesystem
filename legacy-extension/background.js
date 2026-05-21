@@ -1,20 +1,50 @@
 // background.js
-
+// 1. ヘッダー定義を日本語に統一
 const CSV_HEADERS = [
-  'name',
-  'genre',
-  'address',
-  'phone',
-  'regular_holiday',
-  'opening_hours_details',
-  'rating',
-  'reviews',
-  'lat',
-  'lng',
-  'distance_m',
-  'url',
-  'source'
+  '店名',
+  'ジャンル',
+  '住所',
+  '電話番号',
+  '定休日',
+  '営業時間',
+  'URL',
+  '媒体'
 ];
+
+// 2. 出力レコードの内部プロパティ（裏側は英語のまま）
+function normalizeExportRecord(item) {
+  return {
+    name: item?.name || '',
+    genre: item?.genre || '',
+    address: item?.address || '',
+    phone: item?.phone || '',
+    regular_holiday: item?.regularHoliday || item?.regular_holiday || '年中無休',
+    opening_hours_details: item?.openingHoursDetails || item?.opening_hours_details || '',
+    url: item?.url || '',
+    source: 'googlemaps'
+  };
+}
+
+// 3. 日本語ヘッダーの順序に合わせてCSVを組み立てる
+function buildCsvContent(data) {
+  let csvContent = '\uFEFF' + CSV_HEADERS.join(',') + '\n';
+
+  data.forEach((item) => {
+    const row = normalizeExportRecord(item);
+    csvContent += [
+      escapeCsvValue(row.name),
+      escapeCsvValue(row.genre),
+      escapeCsvValue(row.address),
+      escapeCsvValue(row.phone),
+      escapeCsvValue(row.regular_holiday),
+      escapeCsvValue(row.opening_hours_details),
+      escapeCsvValue(row.url),
+      escapeCsvValue(row.source)
+    ].join(',') + '\n';
+  });
+
+  return csvContent;
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({

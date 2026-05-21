@@ -5,24 +5,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { PlaceData, ExportResult } from '../types';
 
-// ── CSVカラム定義（追加・変更はここだけ）────────────────────────────────────
+// ── CSVカラム定義（idはプログラム内部キー、titleが出力される日本語ヘッダー） ───────────────────
 const CSV_HEADERS = [
-  { id: 'name',                title: 'name'                  },
-  { id: 'category',            title: 'category'              },
-  { id: 'address',             title: 'address'               },
-  { id: 'phone',               title: 'phone'                 },
-  { id: 'regularHoliday',      title: 'regular_holiday'       },
-  { id: 'openingHoursDetails', title: 'opening_hours_details' },
-  { id: 'rating',              title: 'rating'                },
-  { id: 'reviewCount',         title: 'review_count'          },
-  { id: 'latitude',            title: 'latitude'              },
-  { id: 'longitude',           title: 'longitude'             },
-  { id: 'distanceKm',          title: 'distance_km'           },
-  { id: 'url',                 title: 'url'                   },
-  { id: 'scrapedAt',           title: 'scraped_at'            },
-  { id: 'source',              title: 'source'                },
+  { id: 'name', title: '店名' },
+  { id: 'category', title: 'ジャンル' },
+  { id: 'address', title: '住所' },
+  { id: 'phone', title: '電話番号' },
+  { id: 'regularHoliday', title: '定休日' },
+  { id: 'openingHoursDetails', title: '営業時間' },
+  { id: 'url', title: 'URL' },
+  { id: 'source', title: '媒体' },
 ];
-
 // ── CSV出力 ───────────────────────────────────────────────────────────────────
 
 export async function exportCsv(
