@@ -1,342 +1,374 @@
 // content.js
+// 高速化版: 1件あたり約5-6秒 → 約2-3秒を目標
+// 高速化のポイント:
+//   1. クリック後の固定待機(2500ms)を廃止 → waitForDetailPanel のポーリングで代替
+//   2. scrapeDetailPanel内のsleep(600)を200msに短縮
+//   3. 営業時間トグル待機(900ms)を500msに短縮
+//   4. closeDetailPanel後のwaitForListPanel完了を確認したらすぐ次へ(800ms固定待機を廃止)
+//   5. ループ末尾の固定待機(300ms)を廃止
+//   6. スクロール後の待機(1800ms)を1000msに短縮
 
-let isScraping = false;
-let maxItemsLimit = 50;
-let targetGenresList = [];
-let collectedUrls = new Set();
-let filterConfig = null;
-let targetSearchArea = ""; // テキストベースの除外ターゲットエリア名
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
 
-// ストレージから取得済みURLを同期
-chrome.storage.local.get(['scrapedData'], (result) => {
-  if (result.scrapedData) {
-    result.scrapedData.forEach(item => collectedUrls.add(item.url));
-  }
-});
+function backgroundSleep(ms) {
+  return new Promise(r => {
+    chrome.runtime.sendMessage({ action: 'backgroundSleep', ms }, () => r());
+  });
+}
 
-// バックグラウンドでのスロットリングを回避するsleep関数
-const sleep = (ms) => new Promise(resolve => {
-  chrome.runtime.sendMessage({ action: 'backgroundSleep', ms: ms }, () => { resolve(); });
-});
+function getCurrentQuery() {
+  return document.querySelector('input#searchboxinput')?.value?.trim() || '';
+}
 
-// 要素がロードされるまで動的に高速待機する関数
-async function waitForElement(selector, timeout = 2000) {
+function extractNameFromUrl(url) {
+  try {
+    const match = url.match(/\/maps\/place\/([^/]+)\//);
+    if (!match) return '';
+    return decodeURIComponent(match[1]).replace(/\+/g, ' ').trim();
+  } catch (e) { return ''; }
+}
+
+// =====================================================================
+// 詳細パネル判定
+// =====================================================================
+function isDetailPanelOpen() {
+  return !!document.querySelector('button[data-item-id="address"]');
+}
+
+async function waitForDetailPanel(timeoutMs = 8000) {
   const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (document.querySelector(selector)) return true;
-    await sleep(40);
+  while (Date.now() - start < timeoutMs) {
+    if (isDetailPanelOpen()) return true;
+    await sleep(200); // 300ms → 200ms
   }
   return false;
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'startScraping') {
-    isScraping = true;
-    maxItemsLimit = request.maxItems || 50;
-    targetGenresList = request.targetGenres || [];
-    filterConfig = request.filterConfig || null;
-    targetSearchArea = request.searchArea || ""; // ポップアップからテキストエリア名を受信
-    startScrapingLoop();
-    sendResponse({ status: 'started' });
-  } else if (request.action === 'stopScraping') {
-    isScraping = false;
-    sendResponse({ status: 'stopped' });
-  } else if (request.action === 'getQuery') {
-    let query = '';
-    const inputQ = document.querySelector('input[name="q"]');
-    if (inputQ && inputQ.value) query = inputQ.value;
-    if (!query) {
-      const searchBox = document.getElementById('searchboxinput');
-      if (searchBox && searchBox.value) query = searchBox.value;
-    }
-    if (!query) {
-      const urlMatch = window.location.href.match(/\/maps\/search\/([^\/]+)/);
-      if (urlMatch) { try { query = decodeURIComponent(urlMatch[1].replace(/\+/g, ' ')); } catch (e) { } }
-    }
-    sendResponse({ query: query });
-  } else if (request.action === 'getMapCenter') {
-    const url = window.location.href;
-    const match = url.match(/@([-+]?\d+\.\d+),([-+]?\d+\.\d+)/);
-    if (match) {
-      sendResponse({ lat: parseFloat(match[1]), lng: parseFloat(match[2]) });
-    } else {
-      sendResponse({ error: '座標が見つかりませんでした。' });
-    }
-  } else if (request.action === 'getGenresFromPage') {
-    const genres = new Set();
-    document.querySelectorAll('.DkEaL').forEach(el => { const text = el.innerText.trim(); if (text) genres.add(text); });
-    sendResponse({ genres: Array.from(genres) });
-  } else if (request.action === 'ping') {
-    sendResponse({ status: 'alive' });
+async function waitForListPanel(timeoutMs = 5000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!isDetailPanelOpen()) return true;
+    await sleep(200); // 300ms → 200ms
   }
-  return true;
-});
-
-function haversineDistance(lat1, lng1, lat2, lng2) {
-  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return Infinity;
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return false;
 }
 
-function extractCoordsFromUrl(url) {
-  const matchD = url.match(/!3d([-+]?\d+\.\d+)!4d([-+]?\d+\.\d+)/);
-  if (matchD) return { lat: parseFloat(matchD[1]), lng: parseFloat(matchD[2]) };
-  const matchAt = url.match(/@([-+]?\d+\.\d+),([-+]?\d+\.\d+)/);
-  if (matchAt) return { lat: parseFloat(matchAt[1]), lng: parseFloat(matchAt[2]) };
+async function closeDetailPanel() {
+  const selectors = [
+    'button[aria-label="前に戻ります"]',
+    'button[jsaction*="omnibox.back"]',
+    'button[aria-label="検索結果に戻る"]',
+    'button[aria-label="Back to results"]',
+  ];
+  for (const sel of selectors) {
+    const btn = document.querySelector(sel);
+    if (btn) { btn.click(); return true; }
+  }
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  return false;
+}
+
+// =====================================================================
+// 営業時間パース
+// =====================================================================
+const WEEKDAY_IDX = { '月':0,'火':1,'水':2,'木':3,'金':4,'土':5,'日':6 };
+const IDX_TO_DAY  = ['月','火','水','木','金','土','日'];
+
+function parseOpeningHours(rows) {
+  if (!rows || !rows.length) return { businessDays:'', openTime:'', closeTime:'', regularHoliday:'' };
+
+  const blocks = [], closedIdx = [];
+
+  for (const row of rows) {
+    const dayMatch = row.match(/^([月火水木金土日])曜日/);
+    if (!dayMatch) continue;
+    const dayIdx = WEEKDAY_IDX[dayMatch[1]];
+    if (dayIdx === undefined) continue;
+
+    if (row.includes('定休日') || row.includes('休業')) {
+      closedIdx.push(dayIdx);
+      continue;
+    }
+
+    const times = [];
+    let m;
+    const re1 = /(\d{1,2})時(\d{2})分[〜～]\s*(\d{1,2})時(\d{2})分/g;
+    while ((m = re1.exec(row)) !== null) {
+      let open = parseInt(m[1]), close = parseInt(m[3]);
+      if (close < open) close += 24;
+      times.push({ open, close });
+    }
+    if (!times.length) {
+      const re2 = /(\d{1,2}):(\d{2})\s*[〜～－\-]\s*(\d{1,2}):(\d{2})/g;
+      while ((m = re2.exec(row)) !== null) {
+        let open = parseInt(m[1]), close = parseInt(m[3]);
+        if (close < open) close += 24;
+        times.push({ open, close });
+      }
+    }
+    if (times.length) blocks.push({ dayIdx, open: times[0].open, close: times[times.length-1].close });
+  }
+
+  if (!blocks.length) return { businessDays:'', openTime:'', closeTime:'', regularHoliday: closedIdx.map(i=>IDX_TO_DAY[i]).join('・') };
+
+  const todayIdx   = (new Date().getDay() + 6) % 7;
+  const todayBlock = blocks.find(b => b.dayIdx === todayIdx) || blocks[0];
+  const activeDays = new Set(blocks.map(b => b.dayIdx));
+  const regularHoliday = closedIdx.length
+    ? closedIdx.map(i => IDX_TO_DAY[i]).join('・')
+    : IDX_TO_DAY.filter((_,i) => !activeDays.has(i)).join('・');
+
+  return {
+    businessDays:  [...activeDays].sort().map(i => IDX_TO_DAY[i]).join('・'),
+    openTime:      String(todayBlock.open),
+    closeTime:     String(todayBlock.close),
+    regularHoliday
+  };
+}
+
+// =====================================================================
+// 詳細パネルスクレイピング
+// =====================================================================
+async function scrapeDetailPanel(placeUrl) {
+  await sleep(200); // 600ms → 200ms（パネルはwaitForDetailPanelで確認済み）
+
+  const h1Text = document.querySelector('[role="main"] h1')?.textContent?.trim() || '';
+  const name   = (h1Text && h1Text !== '結果') ? h1Text : extractNameFromUrl(placeUrl);
+
+  // ジャンル
+  let genre = '';
+  const h1El = document.querySelector('[role="main"] h1');
+  if (h1El) {
+    let el = h1El.parentElement;
+    for (let depth = 0; depth < 3 && !genre; depth++) {
+      if (!el) break;
+      const siblings = Array.from(el.children);
+      const h1Idx   = siblings.findIndex(c => c.contains(h1El));
+      for (let i = h1Idx + 1; i < Math.min(h1Idx + 4, siblings.length); i++) {
+        const text = siblings[i]?.textContent?.trim() || '';
+        if (
+          text.length >= 2 && text.length <= 40 &&
+          !/^[\d¥￥,円〜～\s・]+$/.test(text) &&
+          !text.includes('クチコミ') && !text.includes('★') &&
+          !text.includes('営業') && !text.includes('定休')
+        ) { genre = text; break; }
+      }
+      el = el.parentElement;
+    }
+  }
+
+  // 住所
+  let address = '';
+  const addrBtn = document.querySelector('button[data-item-id="address"]');
+  if (addrBtn) {
+    const raw = addrBtn.getAttribute('aria-label') || addrBtn.textContent.trim();
+    address = raw.replace(/^住所[：:]\s*/, '').trim();
+  }
+
+  // 電話番号
+  let phone = '';
+  const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"]');
+  if (phoneBtn) {
+    const itemId = phoneBtn.getAttribute('data-item-id') || '';
+    phone = itemId.replace('phone:tel:', '').trim() || phoneBtn.textContent.trim();
+  }
+
+  // 営業時間トグル
+  const hoursToggle = document.querySelector('button[data-item-id="oh"]');
+  if (hoursToggle && hoursToggle.getAttribute('aria-expanded') !== 'true') {
+    hoursToggle.click();
+    await sleep(500); // 900ms → 500ms
+  }
+
+  const hourRows = Array.from(document.querySelectorAll('tr'))
+    .map(tr => tr.textContent.replace(/\s+/g, '').trim())
+    .filter(t => /^[月火水木金土日]曜日/.test(t));
+
+  const parsed = parseOpeningHours(hourRows);
+
+  return { name, genre, address, phone, ...parsed };
+}
+
+// =====================================================================
+// コンテナ取得
+// =====================================================================
+function getScrollContainer() {
+  const byClass = document.querySelector('.m6QErb.ecceSd');
+  if (byClass && byClass.querySelectorAll('a[href*="/maps/place/"]').length > 0) return byClass;
+
+  const links = Array.from(document.querySelectorAll('a[href*="/maps/place/"]'));
+  if (!links.length) return null;
+  let el = links[0].parentElement;
+  while (el && el !== document.body) {
+    const count = el.querySelectorAll('a[href*="/maps/place/"]').length;
+    if (count >= Math.min(links.length, 5)) {
+      const s = window.getComputedStyle(el);
+      if (s.overflowY === 'auto' || s.overflowY === 'scroll' || el.scrollHeight > el.clientHeight + 50) return el;
+    }
+    el = el.parentElement;
+  }
   return null;
 }
 
-async function startScrapingLoop() {
-  let scrollContainer = document.querySelector('div[role="feed"]');
-  if (!scrollContainer) {
-    const possibleContainers = Array.from(document.querySelectorAll('div')).filter(div => {
-      const style = window.getComputedStyle(div);
-      return style.overflowY === 'auto' || style.overflowY === 'scroll';
-    });
-    possibleContainers.sort((a, b) => b.clientHeight - a.clientHeight);
-    if (possibleContainers.length > 0) scrollContainer = possibleContainers[0];
+// =====================================================================
+// カード情報取得
+// =====================================================================
+function extractCardInfo(linkEl) {
+  const url  = linkEl.href.split('?')[0];
+  let name   = linkEl.querySelector('.Nv2PK')?.textContent?.trim() || '';
+  if (!name) {
+    const label = linkEl.getAttribute('aria-label') || '';
+    if (label && !/(^結果|について$|のルート|^地図|口コミ$)/.test(label)) name = label.trim();
+  }
+  if (!name) name = extractNameFromUrl(url);
+  return { url, name };
+}
+
+// =====================================================================
+// メインループ
+// =====================================================================
+let isScrapingActive = false;
+
+async function startScraping(maxItems) {
+  isScrapingActive = true;
+  await sleep(500);
+
+  if (isDetailPanelOpen()) {
+    await closeDetailPanel();
+    await waitForListPanel(4000);
   }
 
-  if (!scrollContainer) {
-    alert("リストのスクロールコンテナが見つかりません。");
-    chrome.runtime.sendMessage({ action: 'setState', state: 'inactive' });
+  const container = getScrollContainer();
+  if (!container) {
+    console.error('[Scraper] コンテナが見つかりません');
+    await reportState('done');
     return;
   }
+  console.log('[Scraper] 開始 | コンテナ:', container.className.slice(0, 50), '| links:', container.querySelectorAll('a[href*="/maps/place/"]').length);
 
-  let noNewElementsCount = 0;
-  const maxNoNewElements = 150;
+  const processedUrls = new Set();
+  let noNewCount = 0;
+  const MAX_NO_NEW = 6;
+  let totalProcessed = 0;
+  const startTime = Date.now();
 
-  while (isScraping && collectedUrls.size < maxItemsLimit) {
-    const feedText = scrollContainer.innerText || "";
-    if (
-      feedText.includes("リストの最後に到達しました") ||
-      feedText.includes("これ以上結果はありません") ||
-      feedText.includes("You've reached the end of the list") ||
-      feedText.includes("No more results")
-    ) {
-      break;
+  while (isScrapingActive) {
+    if (isDetailPanelOpen()) {
+      await closeDetailPanel();
+      await waitForListPanel(5000);
+      continue; // 固定待機なしですぐ次へ
     }
 
-    const placeLinks = Array.from(document.querySelectorAll('a[href^="https://www.google.com/maps/place/"], a[href^="https://www.google.co.jp/maps/place/"]'));
-    const newLinks = placeLinks.filter(a => !collectedUrls.has(a.href));
+    const allLinks = Array.from(container.querySelectorAll('a[href*="/maps/place/"]'));
+    const newLinks  = allLinks.filter(a => {
+      const url = a.href.split('?')[0];
+      return url && !processedUrls.has(url);
+    });
 
-    if (newLinks.length > 0) {
-      noNewElementsCount = 0;
-      for (const link of newLinks) {
-        if (!isScraping || collectedUrls.size >= maxItemsLimit) break;
+    if (!newLinks.length) {
+      noNewCount++;
+      if (noNewCount >= MAX_NO_NEW) break;
+      container.scrollBy({ top: 600, behavior: 'smooth' });
+      await backgroundSleep(1000); // 1800ms → 1000ms
+      continue;
+    }
 
-        try {
-          link.scrollIntoView({ behavior: 'auto', block: 'center' });
-          await sleep(150);
+    noNewCount = 0;
 
-          const url = link.href;
-          const name = link.getAttribute('aria-label') || link.innerText || "";
+    for (const linkEl of newLinks) {
+      if (!isScrapingActive) break;
+      if (processedUrls.size >= maxItems) { isScrapingActive = false; break; }
 
-          link.click();
+      const { url, name: cardName } = extractCardInfo(linkEl);
+      if (!url || processedUrls.has(url)) continue;
+      processedUrls.add(url);
 
-          await waitForElement('.DkEaL, button[data-item-id="address"]', 2000);
-
-          const extractedData = await extractDetailData();
-          let coords = extractCoordsFromUrl(url) || extractCoordsFromUrl(window.location.href);
-
-          const placeData = {
-            url, name,
-            genre: extractedData.genre || "",
-            rating: extractedData.rating || "",
-            reviews: extractedData.reviews || "",
-            address: extractedData.address || "",
-            phone: extractedData.phone || "",
-            businessHours: extractedData.businessHours || "",
-            regularHoliday: extractedData.regularHoliday || "年中無休",
-            openingHoursDetails: extractedData.openingHoursDetails || "情報なし",
-            lat: coords ? coords.lat : null,
-            lng: coords ? coords.lng : null,
-            source: 'googlemaps'
-          };
-
-          // ── ★【テキストベース住所フィルター】 ──
-          if (targetSearchArea) {
-            const cleanAddress = placeData.address.replace(/\s+/g, "");
-            const cleanTargetArea = targetSearchArea.replace(/\s+/g, "");
-            // 例：さいたま市で検索時、住所に「さいたま市」が含まれていなければスキップ（除外）
-            if (!cleanAddress.includes(cleanTargetArea)) {
-              console.log(`[他地域店舗を除外] ${placeData.name} - 住所: ${placeData.address}`);
-              collectedUrls.add(url); // 重複処理を防ぐために登録
-              continue;
-            }
-          }
-
-          // ── ジャンルフィルター（ポップアップ側で一括自動展開された配列と部分一致チェック） ──
-          if (targetGenresList.length > 0) {
-            const matches = targetGenresList.some(targetGenre => {
-              return placeData.genre.includes(targetGenre.trim());
-            });
-            if (!matches) { collectedUrls.add(url); continue; }
-          }
-
-          if (filterConfig && filterConfig.enabled && filterConfig.centerLat != null) {
-            const dist = haversineDistance(filterConfig.centerLat, filterConfig.centerLng, placeData.lat, placeData.lng);
-            placeData.distanceMeters = Math.round(dist);
-            if (dist > filterConfig.radiusMeters) { collectedUrls.add(url); continue; }
-          }
-
-          collectedUrls.add(url);
-
-          await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: 'updateData', data: [placeData] }, resolve);
-          });
-
-        } catch (err) {
-          console.error("Error processing place:", err);
-        }
-      }
-    } else {
-      noNewElementsCount++;
-
-      if (noNewElementsCount >= 20) {
-        scrollContainer.scrollTop = scrollContainer.scrollTop - 200;
-        await sleep(300);
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        await sleep(1500);
-
-        const reLinks = Array.from(document.querySelectorAll('a[href^="https://www.google.com/maps/place/"], a[href^="https://www.google.co.jp/maps/place/"]'));
-        if (reLinks.filter(a => !collectedUrls.has(a.href)).length > 0) {
-          noNewElementsCount = 0;
+      try {
+        linkEl.click();
+        // 固定待機なし → waitForDetailPanelのポーリングで判定
+        const panelReady = await waitForDetailPanel(8000);
+        if (!panelReady) {
+          console.warn('[Scraper] パネルが開かなかった:', cardName);
+          await closeDetailPanel();
+          await waitForListPanel(4000);
           continue;
         }
-        break;
-      }
 
-      scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      scrollContainer.scrollTo(0, scrollContainer.scrollHeight);
-      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-      await sleep(2000);
+        const detail = await scrapeDetailPanel(url);
+
+        if (!detail.phone) {
+          console.log('[Scraper] TELなし → スキップ:', detail.name);
+          await closeDetailPanel();
+          await waitForListPanel(4000);
+          continue;
+        }
+
+        const record = {
+          name:           detail.name,
+          genre:          detail.genre,
+          address:        detail.address,
+          phone:          detail.phone,
+          regularHoliday: detail.regularHoliday,
+          businessDays:   detail.businessDays,
+          openTime:       detail.openTime,
+          closeTime:      detail.closeTime,
+          url,
+          source:         'googlemaps'
+        };
+
+        totalProcessed++;
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+        const perItem = totalProcessed > 0 ? (elapsed / totalProcessed).toFixed(1) : '-';
+        console.log(`[Scraper] ✓ ${record.name} | TEL:${record.phone} | 営業:${record.openTime}-${record.closeTime} | 定休:${record.regularHoliday} | ${totalProcessed}件目 ${perItem}秒/件`);
+
+        await new Promise(res => chrome.runtime.sendMessage({ action: 'updateData', data: [record] }, () => res()));
+        chrome.runtime.sendMessage({ action: 'progress', count: processedUrls.size }).catch(() => {});
+
+        await closeDetailPanel();
+        await waitForListPanel(5000);
+        // 固定待機なし → すぐ次へ
+
+      } catch (err) {
+        console.error('[Scraper] エラー:', err);
+        await closeDetailPanel();
+        await sleep(500);
+      }
     }
+
+    container.scrollBy({ top: 600, behavior: 'smooth' });
+    await backgroundSleep(1000); // 1800ms → 1000ms
   }
 
-  chrome.runtime.sendMessage({ action: 'setState', state: 'done' });
-  isScraping = false;
+  console.log(`[Scraper] 完了 | 合計${totalProcessed}件 | ${((Date.now()-startTime)/1000).toFixed(0)}秒`);
+  await reportState('done');
 }
 
-// 営業時間・定休日の見やすさ整理ロジック（全項目維持）
-async function extractDetailData() {
-  const data = { genre: "", rating: "", reviews: "", address: "", phone: "", businessHours: "", regularHoliday: "年中無休", openingHoursDetails: "情報なし" };
-
-  const genreEl = document.querySelector('.DkEaL');
-  data.genre = genreEl ? genreEl.innerText.trim() : (document.querySelector('button[jsaction*="category"]')?.innerText.trim() || "");
-
-  const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"]');
-  if (phoneBtn) {
-    const ariaLabel = phoneBtn.getAttribute('aria-label');
-    data.phone = (ariaLabel && ariaLabel.includes("電話番号: ")) ? ariaLabel.replace("電話番号: ", "").trim() : (phoneBtn.innerText.match(/[\d\-]{10,13}/)?.[0] || "");
-  }
-
-  const addressBtn = document.querySelector('button[data-item-id="address"]');
-  if (addressBtn) {
-    const ariaLabel = addressBtn.getAttribute('aria-label');
-    data.address = (ariaLabel && ariaLabel.includes("住所: ")) ? ariaLabel.replace("住所: ", "").trim() : addressBtn.innerText.trim();
-  }
-
-  const starElements = document.querySelectorAll('[aria-label*="星 "], [aria-label*="stars"]');
-  for (const el of starElements) {
-    const label = el.getAttribute('aria-label');
-    if (label.includes("レビュー") || label.includes("reviews")) {
-      data.rating = label.match(/星\s*([\d\.]+)/)?.[1] || label.match(/([\d\.]+)\s*stars/)?.[1] || "";
-      data.reviews = label.match(/レビュー\s*([\d,]+)\s*件/)?.[1].replace(/,/g, '') || label.match(/([\d,]+)\s*reviews/)?.[1].replace(/,/g, '') || "";
-      break;
-    }
-  }
-
-  let ohBtn = document.querySelector('[aria-label="1 週間の営業時間を表示"], [aria-label*="営業時間を表示"], [aria-label*="営業時間を非表示"], button[data-item-id="oh"]');
-  if (ohBtn) {
-    const ariaLabel = ohBtn.getAttribute('aria-label') || '';
-    data.businessHours = ariaLabel ? ariaLabel.replace(/^営業時間:\s*/, '').replace(/^Hours:\s*/, '').replace(/[。.]\s*営業時間情報を編集.*$/, '').replace(/[。.]\s*Edit business hours.*$/, '').trim() : ohBtn.innerText.trim();
-
-    const isAlreadyExpanded = ariaLabel.includes('非表示') || ariaLabel.includes('Hide') || ariaLabel.includes('営業時間を非表示');
-    if (!isAlreadyExpanded) {
-      try { ohBtn.click(); } catch (e) { }
-
-      const startClick = Date.now();
-      while (Date.now() - startClick < 500) {
-        const hasDays = Array.from(document.querySelectorAll('tr, li, div')).some(el => {
-          const t = el.innerText || '';
-          return t.includes('月曜日') || t.includes('Monday');
-        });
-        if (hasDays) break;
-        await sleep(30);
-      }
-    }
-
-    const daysJp = ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'];
-    const daysEn = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const daysShort = ['月', '火', '水', '木', '金', '土', '日'];
-    const schedule = {};
-
-    const candidates = document.querySelectorAll('tr, li, div');
-    for (const el of candidates) {
-      if (el.children.length > 5) continue;
-      const text = (el.innerText || el.textContent || '').trim();
-      if (!text || text.length > 80) continue;
-
-      for (let i = 0; i < 7; i++) {
-        if (text.includes(daysJp[i]) || text.includes(daysEn[i])) {
-          const cleanText = text.replace(/\s+/g, ' ').trim();
-          if (/[\d：:~～-]|定休|閉|Open|Close/i.test(cleanText)) {
-            if (!schedule[daysJp[i]] || cleanText.length < schedule[daysJp[i]].length) {
-              schedule[daysJp[i]] = cleanText;
-            }
-          }
-        }
-      }
-    }
-
-    const holidayDays = [];
-    const scheduleByShortDay = {};
-
-    for (let i = 0; i < 7; i++) {
-      const fullDay = daysJp[i];
-      const shortDay = daysShort[i];
-      const dayInfo = schedule[fullDay];
-
-      if (dayInfo) {
-        let timeText = dayInfo.replace(fullDay, '').replace(new RegExp(daysEn[i], 'i'), '').replace(/[\uE000-\uF8FF]/g, '').replace(//g, '').trim();
-        timeText = timeText.replace(/(\d{1,2})時(\d{2})分/g, '$1:$2').replace(/(\d{1,2})時/g, '$1:00').replace(/[～-]/g, '〜');
-
-        if (timeText.includes('定休日') || timeText.includes('Closed') || timeText.includes('定休')) {
-          holidayDays.push(fullDay);
-          scheduleByShortDay[shortDay] = '定休日';
-        } else {
-          scheduleByShortDay[shortDay] = timeText;
-        }
-      }
-    }
-
-    if (holidayDays.length > 0) data.regularHoliday = holidayDays.join(', ');
-
-    const groups = [];
-    let currentGroup = null;
-
-    for (const shortDay of daysShort) {
-      const text = scheduleByShortDay[shortDay];
-      if (!text) {
-        if (currentGroup) { groups.push(currentGroup); currentGroup = null; }
-        continue;
-      }
-      if (!currentGroup) {
-        currentGroup = { startDay: shortDay, endDay: shortDay, text: text };
-      } else {
-        if (currentGroup.text === text) { currentGroup.endDay = shortDay; } else { groups.push(currentGroup); currentGroup = { startDay: shortDay, endDay: shortDay, text: text }; }
-      }
-    }
-    if (currentGroup) groups.push(currentGroup);
-
-    if (groups.length > 0) {
-      data.openingHoursDetails = groups.map(g => g.startDay === g.endDay ? `${g.startDay}: ${g.text}` : `${g.startDay}〜${g.endDay}: ${g.text}`).join(', ');
-    }
-  }
-
-  return data;
+async function reportState(state) {
+  return new Promise(r => chrome.runtime.sendMessage({ action: 'setState', state }, () => r()));
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'ping') { sendResponse({ alive: true }); return false; }
+  if (request.action === 'getQuery') { sendResponse({ query: getCurrentQuery() }); return false; }
+
+  if (request.action === 'startScraping') {
+    if (isScrapingActive) { sendResponse({ success: false, reason: 'already running' }); return false; }
+    startScraping(request.maxItems || 50).catch(err => {
+      console.error('[Scraper] 致命的エラー:', err);
+      reportState('done');
+    });
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (request.action === 'stopScraping') {
+    isScrapingActive = false;
+    reportState('done');
+    sendResponse({ success: true });
+    return false;
+  }
+
+  return false;
+});
